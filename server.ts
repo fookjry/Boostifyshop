@@ -232,6 +232,7 @@ async function startServer() {
   app.use(helmet({
     contentSecurityPolicy: false, // Disable CSP for Vite dev server compatibility
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false, // Allow Firebase popups to communicate back
   }));
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));

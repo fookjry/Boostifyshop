@@ -80,7 +80,11 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
     try {
       const response = await axios.post('/api/verify-turnstile', { token });
       return response.data.success;
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Turnstile verification failed:", err);
+      if (err.response?.status === 500) {
+        setError('เกิดข้อผิดพลาดที่เซิร์ฟเวอร์: กรุณาตรวจสอบการตั้งค่า Turnstile Secret Key ในไฟล์ .env');
+      }
       return false;
     }
   };

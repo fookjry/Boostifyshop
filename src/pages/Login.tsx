@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Shield, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 
@@ -66,11 +66,14 @@ export function Login({ settings }: { settings: any }) {
     }
   };
 
-  const handleGoogle = async () => {
+  const handleGoogle = async (useRedirect = false) => {
     const provider = new GoogleAuthProvider();
     try {
       setError('');
-      // setPersistence(auth, browserLocalPersistence); // Removed await to keep user interaction context
+      if (useRedirect) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       const result = await signInWithPopup(auth, provider);
       console.log("Login Success:", result.user.email);
     } catch (err: any) {
@@ -79,14 +82,31 @@ export function Login({ settings }: { settings: any }) {
         setError(
           <div className="flex flex-col gap-2">
             <span>เบราว์เซอร์บล็อกหน้าต่างป๊อปอัพ กรุณาอนุญาตป๊อปอัพ หรือ</span>
-            <a 
-              href={window.location.href} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-400 underline font-bold"
+            <button 
+              onClick={() => handleGoogle(true)}
+              className="text-blue-400 underline font-bold text-left"
             >
-              คลิกที่นี่เพื่อเปิดแอปในหน้าต่างใหม่
-            </a>
+              คลิกที่นี่เพื่อเข้าสู่ระบบด้วยวิธีเปลี่ยนหน้า (Redirect)
+            </button>
+          </div>
+        );
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError(
+          <div className="flex flex-col gap-2">
+            <span>หน้าต่างเข้าสู่ระบบถูกปิดก่อนทำรายการเสร็จสิ้น</span>
+            <button 
+              onClick={() => handleGoogle(true)}
+              className="text-blue-400 underline font-bold text-left"
+            >
+              หากหน้าต่างปิดเองอัตโนมัติ คลิกที่นี่เพื่อใช้การ Redirect แทน
+            </button>
+          </div>
+        );
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError(
+          <div className="flex flex-col gap-2">
+            <span>โดเมนนี้ยังไม่ได้รับอนุญาตใน Firebase Console</span>
+            <p className="text-xs text-slate-400">กรุณาเพิ่ม {window.location.hostname} ใน Authorized Domains ของ Firebase Authentication</p>
           </div>
         );
       } else {
