@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Shield, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 
@@ -70,8 +70,10 @@ export function Login({ settings }: { settings: any }) {
     const provider = new GoogleAuthProvider();
     try {
       setError('');
-      await signInWithRedirect(auth, provider);
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithPopup(auth, provider);
     } catch (err: any) {
+      console.error(err);
       setError('ไม่สามารถเข้าสู่ระบบด้วย Google ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
     }
   };

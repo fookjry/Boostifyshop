@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
-import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Navbar } from './components/Navbar';
@@ -28,16 +28,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Handle Redirect Result for Google Sign-In
-    getRedirectResult(auth).then((result) => {
-      if (result?.user) {
-        console.log("Redirect Sign-In Success:", result.user.email);
-        setUser(result.user);
-      }
-    }).catch((error) => {
-      console.error("Redirect Sign-In Error:", error);
-    });
-
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
       if (doc.exists()) {
         setSettings(doc.data());
