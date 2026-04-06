@@ -49,7 +49,6 @@ nano .env
 | `PORT` | The port the app will run on (default: 3000) |
 | `NODE_ENV` | Set to `production` for VPS deployment |
 | `FIREBASE_*` | Your Firebase project credentials |
-| `CLOUDFLARE_TURNSTILE_SECRET_KEY` | Secret key for Turnstile verification |
 | `EASY_SLIP_API_KEY` | API key from EasySlip for slip verification |
 | `THREE_X_UI_*` | (Optional) Default 3x-ui server credentials |
 
@@ -137,4 +136,3 @@ npm run dev
 - **Rate Limiting**: API endpoints are protected against brute-force.
 - **Helmet**: Secure HTTP headers.
 - **CORS**: Configured for production.
-- **Turnstile**: Bot protection on sensitive endpoints.

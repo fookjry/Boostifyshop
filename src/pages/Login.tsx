@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Shield, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
-import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 
 export function Login({ settings }: { settings: any }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -10,8 +9,6 @@ export function Login({ settings }: { settings: any }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode>('');
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const siteName = settings?.siteName || 'VPNSaaS';
   const logoUrl = settings?.logoUrl;
@@ -19,11 +16,6 @@ export function Login({ settings }: { settings: any }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!turnstileToken) {
-      setError('กรุณายืนยันตัวตนผ่าน CAPTCHA');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -59,8 +51,6 @@ export function Login({ settings }: { settings: any }) {
         default:
           setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
       }
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
     } finally {
       setLoading(false);
     }
@@ -164,25 +154,6 @@ export function Login({ settings }: { settings: any }) {
 
           {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
 
-          <div className="py-2">
-            {import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY ? (
-              <Turnstile 
-                ref={turnstileRef}
-                siteKey={import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY}
-                onSuccess={(token) => setTurnstileToken(token)}
-                onError={() => {
-                  setError('CAPTCHA error');
-                  setTurnstileToken(null);
-                }}
-                onExpire={() => setTurnstileToken(null)}
-              />
-            ) : (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
-                CAPTCHA configuration error
-              </div>
-            )}
-          </div>
-
           <button 
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
@@ -198,7 +169,7 @@ export function Login({ settings }: { settings: any }) {
           </div>
 
           <button 
-            onClick={handleGoogle}
+            onClick={() => handleGoogle()}
             className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-slate-700"
           >
             <Chrome className="w-5 h-5" /> Google

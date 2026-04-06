@@ -5,7 +5,6 @@ import { Server, Zap, Shield, Check, Loader2, AlertTriangle, Wifi, Gift } from '
 import { motion } from 'motion/react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
@@ -26,8 +25,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   const [trialSuccess, setTrialSuccess] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const hasUsedTrial = () => {
     return !!profile?.hasUsedTrial;
@@ -76,33 +73,8 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
     };
   }, []);
 
-  const verifyTurnstile = async (token: string) => {
-    try {
-      const response = await axios.post('/api/verify-turnstile', { token });
-      return response.data.success;
-    } catch (err: any) {
-      console.error("Turnstile verification failed:", err);
-      if (err.response?.status === 500) {
-        setError('เกิดข้อผิดพลาดที่เซิร์ฟเวอร์: กรุณาตรวจสอบการตั้งค่า Turnstile Secret Key ในไฟล์ .env');
-      }
-      return false;
-    }
-  };
-
   const handlePurchase = async () => {
     if (!selectedServer || !selectedServer.prices) return;
-    if (!turnstileToken) {
-      setError('กรุณายืนยันตัวตนผ่าน CAPTCHA');
-      return;
-    }
-
-    const isVerified = await verifyTurnstile(turnstileToken);
-    if (!isVerified) {
-      setError('CAPTCHA ไม่ถูกต้อง กรุณาลองใหม่');
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
-      return;
-    }
     
     // Check server capacity using currentUsers field on server document
     const activeUsers = selectedServer.currentUsers || 0;
@@ -144,26 +116,12 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
       setError(err.response?.data?.error || err.message);
     } finally {
       setLoading(false);
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
     }
   };
 
   const handleFreeTrial = async () => {
     if (hasUsedTrial()) return;
     if (!selectedServer) return;
-    if (!turnstileToken) {
-      setError('กรุณายืนยันตัวตนผ่าน CAPTCHA');
-      return;
-    }
-
-    const isVerified = await verifyTurnstile(turnstileToken);
-    if (!isVerified) {
-      setError('CAPTCHA ไม่ถูกต้อง กรุณาลองใหม่');
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
-      return;
-    }
     
     if (selectedServer.status !== 'online') {
       setError('ขออภัย เซิร์ฟเวอร์นี้ปิดปรับปรุงชั่วคราว (Server is offline)');
@@ -222,8 +180,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
       setError(err.response?.data?.error || err.message);
     } finally {
       setTrialLoading(false);
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
     }
   };
 
@@ -481,25 +437,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 <p className="text-xs text-red-400">{error}</p>
               </div>
             )}
-
-            <div className="py-2 w-full overflow-hidden">
-              {import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY ? (
-                <Turnstile 
-                  ref={turnstileRef}
-                  siteKey={import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onError={() => {
-                    setError('CAPTCHA error');
-                    setTurnstileToken(null);
-                  }}
-                  onExpire={() => setTurnstileToken(null)}
-                />
-              ) : (
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
-                  CAPTCHA configuration error
-                </div>
-              )}
-            </div>
 
             <label className="flex items-start gap-3 cursor-pointer group">
               <div className="relative flex items-center justify-center mt-1">

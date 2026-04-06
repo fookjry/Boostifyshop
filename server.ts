@@ -270,6 +270,24 @@ async function startServer() {
     message: { error: "Too many topup attempts, please try again in an hour" },
   });
 
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit each IP to 20 login attempts per 15 minutes
+    message: { error: "Too many login attempts, please try again after 15 minutes" },
+  });
+
+  const purchaseLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, // 10 minutes
+    max: 5, // Limit each IP to 5 purchase attempts per 10 minutes
+    message: { error: "Too many purchase attempts, please try again after 10 minutes" },
+  });
+
+  // Apply limiters to sensitive routes
+  app.use("/api/auth/login", loginLimiter);
+  app.use("/api/vpn/purchase", purchaseLimiter);
+  app.use("/api/vpn/trial", purchaseLimiter);
+  app.use("/api/topup/verify", topupLimiter);
+
   // Auth Middleware
   const authenticate = async (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
@@ -315,42 +333,6 @@ async function startServer() {
 
     res.status(403).json({ error: "Forbidden: Admin access required" });
   };
-
-  // Turnstile Verification
-  app.post("/api/verify-turnstile", async (req: any, res) => {
-    const { token } = req.body;
-    const secret = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY;
-    
-    if (!token) return res.status(400).json({ success: false, error: "Token missing" });
-    if (!secret) {
-      console.error("Turnstile Secret Key is missing in environment variables.");
-      return res.status(500).json({ success: false, error: "Server configuration error: Secret key missing" });
-    }
-
-    try {
-      const formData = new URLSearchParams();
-      formData.append('secret', secret);
-      formData.append('response', token);
-      
-      const response = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      
-      if (response.data.success) {
-        res.json({ success: true });
-      } else {
-        const errorCodes = response.data['error-codes'] || [];
-        const errorMessage = errorCodes.length > 0 ? errorCodes.join(', ') : 'Verification failed (No error codes returned)';
-        console.error("Turnstile verification failed. Response:", JSON.stringify(response.data));
-        res.status(400).json({ success: false, error: "Verification failed: " + errorMessage, details: response.data });
-      }
-    } catch (error: any) {
-      console.error("Turnstile verification request error:", error.message);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
 
   // API Routes
   app.get("/api/health", (req, res) => {
