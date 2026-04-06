@@ -29,6 +29,7 @@
     "helmet": "^8.1.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "pm2": "^6.0.14",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

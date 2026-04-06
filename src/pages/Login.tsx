@@ -9,7 +9,7 @@ export function Login({ settings }: { settings: any }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<React.ReactNode>('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileInstance>(null);
 
@@ -70,11 +70,29 @@ export function Login({ settings }: { settings: any }) {
     const provider = new GoogleAuthProvider();
     try {
       setError('');
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithPopup(auth, provider);
+      // setPersistence(auth, browserLocalPersistence); // Removed await to keep user interaction context
+      const result = await signInWithPopup(auth, provider);
+      console.log("Login Success:", result.user.email);
     } catch (err: any) {
-      console.error(err);
-      setError('ไม่สามารถเข้าสู่ระบบด้วย Google ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
+      console.error("Google Login Error:", err);
+      if (err.code === 'auth/popup-blocked') {
+        setError(
+          <div className="flex flex-col gap-2">
+            <span>เบราว์เซอร์บล็อกหน้าต่างป๊อปอัพ กรุณาอนุญาตป๊อปอัพ หรือ</span>
+            <a 
+              href={window.location.href} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 underline font-bold"
+            >
+              คลิกที่นี่เพื่อเปิดแอปในหน้าต่างใหม่
+            </a>
+          </div>
+        );
+      } else {
+        const errorMessage = err.code ? `Error: ${err.code} - ${err.message}` : 'ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง';
+        setError(errorMessage);
+      }
     }
   };
 

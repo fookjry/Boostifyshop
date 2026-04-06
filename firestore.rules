@@ -15,6 +15,7 @@ service cloud.firestore {
       return isAuthenticated() && 
         ((request.auth.token.email == "jry.fook@gmail.com" && request.auth.token.email_verified == true) || 
          request.auth.token.email == "server@local.host" ||
+         request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
@@ -23,7 +24,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && 
-                    (request.resource.data.role == 'user' || (request.resource.data.role == 'admin' && request.auth.token.email == "jry.fook@gmail.com")) && 
+                    (request.resource.data.role == 'user' || 
+                     (request.resource.data.role == 'admin' && (request.auth.token.email == "jry.fook@gmail.com" || request.auth.token.email == "server@local.host" || request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2"))) && 
                     request.resource.data.balance == 0;
       allow update: if isAdmin() || (isOwner(userId) && 
                     !request.resource.data.diff(resource.data).affectedKeys().hasAny(['balance', 'role']));

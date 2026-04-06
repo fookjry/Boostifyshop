@@ -6,17 +6,67 @@ import axios from "axios";
 import helmet from "helmet";
 import cors from "cors";
 import { rateLimit } from "express-rate-limit";
-import admin from "firebase-admin";
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, addDoc, collection, query, where, limit, getDocs, runTransaction } from "firebase/firestore";
+import { getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 
-// Initialize Firebase Admin
-const firebaseAdminConfig = {
-  projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId,
-};
-admin.initializeApp(firebaseAdminConfig);
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  if (error instanceof Error && (error.message.includes('permission') || error.message.includes('PERMISSION_DENIED'))) {
+     throw new Error(JSON.stringify(errInfo));
+  }
+  throw error;
+}
 
 const firebaseAppConfig = {
   apiKey: process.env.FIREBASE_API_KEY || firebaseConfig.apiKey,
@@ -27,32 +77,94 @@ const firebaseAppConfig = {
   appId: process.env.FIREBASE_APP_ID || firebaseConfig.appId,
 };
 
-const app = initializeApp(firebaseAppConfig);
-const db = getFirestore(app, process.env.FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId);
-const auth = getAuth(app);
+const firebaseApp = initializeApp(firebaseAppConfig);
+const auth = getAuth(firebaseApp);
+const databaseId = process.env.FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId;
 
-// Authenticate Server
+// Initialize Admin App for Auth token verification
+const adminApp = getAdminApps().length ? getAdminApps()[0] : initializeAdminApp({
+  projectId: firebaseAppConfig.projectId,
+});
+
+const dbModular = getFirestore(firebaseApp, databaseId);
+const db = {
+  collection: (path: string) => {
+    const collRef = collection(dbModular, path);
+    return {
+      doc: (id?: string) => {
+        const docRef = id ? doc(dbModular, path, id) : doc(collRef);
+        const docProxy = Object.assign(docRef, {
+          get: () => getDoc(docRef),
+          set: (data: any, options?: any) => setDoc(docRef, data, options),
+          update: (data: any) => updateDoc(docRef, data),
+          delete: () => deleteDoc(docRef),
+          collection: (subPath: string) => {
+            const fullPath = `${path}/${docRef.id}/${subPath}`;
+            return db.collection(fullPath);
+          }
+        });
+        return docProxy;
+      },
+      add: (data: any) => addDoc(collRef, data),
+      get: () => getDocs(collRef)
+    };
+  },
+  runTransaction: (callback: any) => runTransaction(dbModular, callback)
+};
+
+const FieldValue = {
+  increment: (n: number) => increment(n),
+  serverTimestamp: () => serverTimestamp()
+};
+console.log(`Firestore Client SDK (Proxy) initialized with project: ${firebaseAppConfig.projectId}, database: ${databaseId || '(default)'}`);
+
+// Authenticate Server (Required for Client SDK DB access)
 async function authenticateServer() {
   try {
-    await signInWithEmailAndPassword(auth, "server@local.host", "server_password_123");
-    console.log("Server authenticated successfully.");
+    const userCredential = await signInWithEmailAndPassword(auth, "server@local.host", "server_password_123");
+    console.log("Server authenticated successfully. UID:", userCredential.user.uid);
     
-    // Test Firestore connectivity
+    // Ensure server user is an admin in Firestore
     try {
-      const testDoc = await getDoc(doc(db, 'settings', 'global'));
+      const userRef = db.collection('users').doc(userCredential.user.uid);
+      const userSnap = await userRef.get();
+      if (!userSnap.exists() || userSnap.data()?.role !== 'admin') {
+        console.log("Setting server user as admin in Firestore...");
+        await userRef.set({
+          email: "server@local.host",
+          role: "admin",
+          balance: 0,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (dbError: any) {
+      console.error("Failed to ensure server admin role in Firestore:", dbError.message);
+    }
+
+    // Test Firestore connectivity using Admin SDK
+    try {
+      const testDoc = await db.collection('settings').doc('global').get();
       if (testDoc.exists()) {
-        console.log("Firestore server-side connection test: SUCCESS");
+        console.log("Firestore server-side connection test: SUCCESS (Admin SDK)");
       } else {
-        console.log("Firestore server-side connection test: SUCCESS (Document not found but reachable)");
+        console.log("Firestore server-side connection test: SUCCESS (Document not found but reachable via Admin SDK)");
       }
     } catch (connError: any) {
       console.error("Firestore server-side connection test: FAILED", connError.message);
     }
   } catch (error: any) {
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
       try {
-        await createUserWithEmailAndPassword(auth, "server@local.host", "server_password_123");
-        console.log("Server user created and authenticated.");
+        const userCredential = await createUserWithEmailAndPassword(auth, "server@local.host", "server_password_123");
+        console.log("Server user created and authenticated. UID:", userCredential.user.uid);
+        
+        // Set admin role for new server user
+        await db.collection('users').doc(userCredential.user.uid).set({
+          email: "server@local.host",
+          role: "admin",
+          balance: 0,
+          createdAt: new Date().toISOString()
+        });
       } catch (createError) {
         console.error("Failed to create server user:", createError);
       }
@@ -61,7 +173,7 @@ async function authenticateServer() {
     }
   }
 }
-authenticateServer();
+await authenticateServer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -166,7 +278,7 @@ async function startServer() {
 
     const idToken = authHeader.split('Bearer ')[1];
     try {
-      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const decodedToken = await getAdminAuth().verifyIdToken(idToken);
       req.user = decodedToken;
       next();
     } catch (error) {
@@ -188,12 +300,16 @@ async function startServer() {
 
     // Check Firestore for admin role
     try {
-      const userSnap = await getDoc(doc(db, 'users', uid));
-      if (userSnap.exists() && userSnap.data().role === 'admin') {
+      const userSnap = await db.collection('users').doc(uid).get();
+      if (userSnap.exists() && userSnap.data()?.role === 'admin') {
         return next();
       }
     } catch (error) {
-      console.error("Admin check failed:", error);
+      try {
+        handleFirestoreError(error, OperationType.GET, `users/${uid}`);
+      } catch (e: any) {
+        return res.status(403).json({ error: "Forbidden: Admin check failed", details: e.message });
+      }
     }
 
     res.status(403).json({ error: "Forbidden: Admin access required" });
@@ -205,10 +321,12 @@ async function startServer() {
     const secret = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY;
     
     if (!token) return res.status(400).json({ success: false, error: "Token missing" });
-    if (!secret) return res.status(500).json({ success: false, error: "Server configuration error" });
+    if (!secret) {
+      console.error("Turnstile Secret Key is missing in environment variables.");
+      return res.status(500).json({ success: false, error: "Server configuration error: Secret key missing" });
+    }
 
     try {
-      console.log("Verifying Turnstile token...");
       const formData = new URLSearchParams();
       formData.append('secret', secret);
       formData.append('response', token);
@@ -219,15 +337,13 @@ async function startServer() {
         }
       });
       
-      console.log("Turnstile verification response:", response.data);
-      
       if (response.data.success) {
         res.json({ success: true });
       } else {
-        const errorCodes = response.data['error-codes'];
-        const errorMessage = errorCodes && errorCodes.length > 0 ? errorCodes.join(', ') : 'Invalid or expired token';
-        console.error("Turnstile verification failed:", errorCodes);
-        res.status(400).json({ success: false, error: "Verification failed: " + errorMessage });
+        const errorCodes = response.data['error-codes'] || [];
+        const errorMessage = errorCodes.length > 0 ? errorCodes.join(', ') : 'Verification failed (No error codes returned)';
+        console.error("Turnstile verification failed. Response:", JSON.stringify(response.data));
+        res.status(400).json({ success: false, error: "Verification failed: " + errorMessage, details: response.data });
       }
     } catch (error: any) {
       console.error("Turnstile verification request error:", error.message);
@@ -501,7 +617,7 @@ async function startServer() {
     
     try {
       // Validate device option and calculate expected price
-      const deviceOptionsSnap = await getDocs(collection(db, 'device_options'));
+      const deviceOptionsSnap = await db.collection('device_options').get();
       const deviceOptions = deviceOptionsSnap.docs.map(doc => doc.data());
       const selectedDeviceOption = deviceOptions.find(o => o.count === deviceCount && o.status === true);
       
@@ -513,24 +629,25 @@ async function startServer() {
         expectedDevicePrice = selectedDeviceOption.price;
       }
 
-      const serverRef = doc(db, 'servers', server.id);
-      const userRef = doc(db, 'users', userId);
+      const serverRef = db.collection('servers').doc(server.id);
+      const userRef = db.collection('users').doc(userId);
 
       // Fetch private credentials outside transaction
-      const credSnap = await getDoc(doc(db, `servers/${server.id}/private`, 'credentials'));
+      const credSnap = await serverRef.collection('private').doc('credentials').get();
       const creds = credSnap.exists() ? credSnap.data() : { username: server.username || '', password: server.password || '' };
-      const fullServer = { ...server, id: server.id, username: creds.username, password: creds.password };
+      const fullServer = { ...server, id: server.id, username: creds?.username, password: creds?.password };
 
       let vpnData = null;
 
-      await runTransaction(db, async (transaction) => {
+      await db.runTransaction(async (transaction) => {
         // --- READ PHASE ---
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) {
           throw new Error("User not found");
         }
         
-        const currentBalance = userSnap.data().balance || 0;
+        const userData = userSnap.data() || {};
+        const currentBalance = userData.balance || 0;
         if (currentBalance < price) {
           throw new Error("ยอดเงินคงเหลือไม่เพียงพอ (Insufficient balance)");
         }
@@ -539,7 +656,7 @@ async function startServer() {
         if (!serverSnap.exists()) {
           throw new Error("Server not found");
         }
-        const serverData = serverSnap.data();
+        const serverData = serverSnap.data() || {};
         
         // Validate total price
         const expectedBasePrice = serverData.prices?.[days] || 0;
@@ -564,10 +681,6 @@ async function startServer() {
         transaction.update(serverRef, {
           currentUsers: activeUsers + 1
         });
-
-        // 3. We cannot call external API (createVpnConfig) inside a Firestore transaction.
-        // Wait, Firestore transactions can run multiple times if there's contention.
-        // It's dangerous to call external APIs inside runTransaction.
       });
 
       // If transaction succeeds, we have deducted the balance.
@@ -585,15 +698,16 @@ async function startServer() {
           expireAt,
           status: "active",
           network,
+          deviceCount,
           clientName,
           createdAt: new Date().toISOString()
         };
 
         // Save VPN to Firestore
-        await addDoc(collection(db, 'vpns'), vpnData);
+        await db.collection('vpns').add(vpnData);
 
         // Save Transaction to Firestore
-        await addDoc(collection(db, 'transactions'), {
+        await db.collection('transactions').add({
           userId: userId,
           userEmail: userEmail,
           amount: -price,
@@ -605,14 +719,18 @@ async function startServer() {
       } catch (vpnError: any) {
         // If VPN creation fails, we MUST refund the user and decrement server users
         console.error("VPN Creation failed, refunding user:", vpnError);
-        await updateDoc(userRef, { balance: increment(price) });
-        await updateDoc(serverRef, { currentUsers: increment(-1) });
+        await userRef.update({ balance: FieldValue.increment(price) });
+        await serverRef.update({ currentUsers: FieldValue.increment(-1) });
         throw new Error("Failed to create VPN config: " + vpnError.message);
       }
 
       res.json({ success: true, vpn: vpnData });
     } catch (error: any) {
-      console.error("Purchase Error:", error);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, 'vpn/purchase');
+      } catch (e: any) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
       res.status(400).json({ success: false, error: error.message });
     }
   });
@@ -627,16 +745,16 @@ async function startServer() {
     
     try {
       // Fetch server data and private credentials
-      const serverRef = doc(db, 'servers', server.id);
-      const serverSnap = await getDoc(serverRef);
+      const serverRef = db.collection('servers').doc(server.id);
+      const serverSnap = await serverRef.get();
       if (!serverSnap.exists()) {
         return res.status(404).json({ success: false, error: "Server not found" });
       }
-      const serverData = serverSnap.data();
+      const serverData = serverSnap.data() || {};
       
-      const credSnap = await getDoc(doc(db, `servers/${server.id}/private`, 'credentials'));
+      const credSnap = await serverRef.collection('private').doc('credentials').get();
       const creds = credSnap.exists() ? credSnap.data() : { username: '', password: '' };
-      const fullServer = { ...serverData, id: server.id, username: creds.username, password: creds.password };
+      const fullServer = { ...serverData, id: server.id, username: creds?.username, password: creds?.password };
 
       // 1 hour trial = 1/24 days
       const days = 1/24; 
@@ -652,22 +770,23 @@ async function startServer() {
         expireAt,
         status: "active",
         network,
+        deviceCount: 1,
         clientName,
         isTrial: true,
         createdAt: new Date().toISOString()
       };
 
       // Save VPN to Firestore
-      await addDoc(collection(db, 'vpns'), vpnData);
+      await db.collection('vpns').add(vpnData);
 
       // Update user profile with trial flag
-      await updateDoc(doc(db, 'users', userId), {
+      await db.collection('users').doc(userId).update({
         hasUsedTrial: true,
         lastTrialAt: new Date().toISOString()
       });
 
       // Log transaction
-      await addDoc(collection(db, 'transactions'), {
+      await db.collection('transactions').add({
         userId: userId,
         userEmail: userEmail,
         amount: 0,
@@ -681,6 +800,11 @@ async function startServer() {
         vpn: vpnData
       });
     } catch (error: any) {
+      try {
+        handleFirestoreError(error, OperationType.WRITE, 'vpn/trial');
+      } catch (e: any) {
+        return res.status(500).json({ success: false, error: e.message });
+      }
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -688,13 +812,18 @@ async function startServer() {
   // Payment Methods Status (Firestore)
   app.get("/api/payment-methods", async (req, res) => {
     try {
-      const snap = await getDoc(doc(db, 'settings', 'payment_methods'));
+      const snap = await db.collection('settings').doc('payment_methods').get();
       if (snap.exists()) {
         res.json(snap.data());
       } else {
         res.json({ promptpay: true, truemoney: true });
       }
     } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.GET, 'settings/payment_methods');
+      } catch (e: any) {
+        return res.status(500).json({ error: "Failed to fetch payment methods", details: e.message });
+      }
       res.status(500).json({ error: "Failed to fetch payment methods" });
     }
   });
@@ -710,7 +839,7 @@ async function startServer() {
     }
     
     try {
-      const snap = await getDoc(doc(db, 'settings', 'payment_methods'));
+      const snap = await db.collection('settings').doc('payment_methods').get();
       const methods = snap.exists() ? snap.data() : null;
       const methodKey = type === 'gift' ? 'truemoney' : 'promptpay';
       
@@ -722,7 +851,7 @@ async function startServer() {
       }
 
       if (type === 'transfer') {
-        const paymentSettingsSnap = await getDoc(doc(db, 'settings', 'payment'));
+        const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
         const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
         const apiKey = process.env.EASY_SLIP_API_KEY;
 
@@ -774,12 +903,11 @@ async function startServer() {
 
             // 3. Duplicate slip check & Balance update (Atomic Transaction)
             try {
-              await runTransaction(db, async (transaction) => {
+              await db.runTransaction(async (transaction) => {
                 // --- READ PHASE ---
-                let slipRef: any = null;
                 // Check duplicate slip
                 if (transRef) {
-                  slipRef = doc(db, 'used_slips', transRef);
+                  const slipRef = db.collection('used_slips').doc(transRef);
                   const slipSnap = await transaction.get(slipRef);
                   if (slipSnap.exists()) {
                     throw new Error(`สลิปนี้ถูกใช้งานไปแล้ว รหัส: ${transRef}`);
@@ -787,15 +915,16 @@ async function startServer() {
                 }
 
                 // Get user balance
-                const userRef = doc(db, 'users', userId);
+                const userRef = db.collection('users').doc(userId);
                 const userSnap = await transaction.get(userRef);
-                const userEmail = userSnap.exists() ? userSnap.data().email : 'Unknown';
-                const currentBalance = userSnap.exists() ? (userSnap.data().balance || 0) : 0;
+                const userData = userSnap.data() || {};
+                const userEmail = userData.email || 'Unknown';
+                const currentBalance = userData.balance || 0;
 
                 // --- WRITE PHASE ---
-                if (transRef && slipRef) {
+                if (transRef) {
                   // Mark slip as used
-                  transaction.set(slipRef, { 
+                  transaction.set(db.collection('used_slips').doc(transRef), { 
                     usedAt: new Date().toISOString(), 
                     userId, 
                     amount 
@@ -808,7 +937,7 @@ async function startServer() {
                 });
 
                 // Create transaction record
-                const txRef = doc(collection(db, 'transactions'));
+                const txRef = db.collection('transactions').doc();
                 transaction.set(txRef, {
                   userId: userId,
                   userEmail: userEmail,
@@ -820,7 +949,11 @@ async function startServer() {
                 });
               });
             } catch (txError: any) {
-              console.error("Transaction failed:", txError);
+              try {
+                handleFirestoreError(txError, OperationType.WRITE, 'topup/verify/transfer');
+              } catch (e: any) {
+                return res.status(400).json({ success: false, error: e.message });
+              }
               return res.status(400).json({ success: false, error: txError.message || "เกิดข้อผิดพลาดในการอัปเดตยอดเงิน" });
             }
 
@@ -855,9 +988,9 @@ async function startServer() {
         }
         
         // Get receiver phone number from settings
-        const paymentSettingsSnap = await getDoc(doc(db, 'settings', 'payment'));
+        const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
         const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
-        const mobile = paymentSettings.trueMoneyNumber?.replace(/[^0-9]/g, '');
+        const mobile = paymentSettings?.trueMoneyNumber?.replace(/[^0-9]/g, '');
 
         if (!mobile) {
           return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่าเบอร์โทรศัพท์สำหรับรับอั่งเปา" });
@@ -870,15 +1003,15 @@ async function startServer() {
           const axiosConfig: any = {
             headers: {
               'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1',
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
               'Accept': 'application/json',
-              'Accept-Language': 'th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7',
+              'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8',
               'Referer': `https://gift.truemoney.com/campaign/?v=${voucherHash}`,
               'Origin': 'https://gift.truemoney.com',
-              'Host': 'gift.truemoney.com',
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache',
-              'X-Requested-With': 'XMLHttpRequest'
+              'X-Requested-With': 'XMLHttpRequest',
+              'Sec-Fetch-Dest': 'empty',
+              'Sec-Fetch-Mode': 'cors',
+              'Sec-Fetch-Site': 'same-origin'
             },
             timeout: 15000
           };
@@ -922,17 +1055,18 @@ async function startServer() {
 
             // Update user balance and create transaction record (Atomic Transaction)
             try {
-              await runTransaction(db, async (transaction) => {
-                const userRef = doc(db, 'users', userId);
+              await db.runTransaction(async (transaction) => {
+                const userRef = db.collection('users').doc(userId);
                 const userSnap = await transaction.get(userRef);
-                const userEmail = userSnap.exists() ? userSnap.data().email : 'Unknown';
-                const currentBalance = userSnap.exists() ? (userSnap.data().balance || 0) : 0;
+                const userData = userSnap.data() || {};
+                const userEmail = userData.email || 'Unknown';
+                const currentBalance = userData.balance || 0;
 
                 transaction.update(userRef, {
                   balance: currentBalance + amount
                 });
 
-                const txRef = doc(collection(db, 'transactions'));
+                const txRef = db.collection('transactions').doc();
                 transaction.set(txRef, {
                   userId: userId,
                   userEmail: userEmail,
@@ -944,9 +1078,11 @@ async function startServer() {
                 });
               });
             } catch (txError: any) {
-              console.error("TrueMoney transaction failed:", txError);
-              // Note: The voucher is already redeemed at this point. 
-              // In a production system, we would need a reconciliation process.
+              try {
+                handleFirestoreError(txError, OperationType.WRITE, 'topup/verify/truemoney');
+              } catch (e: any) {
+                return res.status(500).json({ success: false, error: e.message });
+              }
               return res.status(500).json({ success: false, error: "เติมเงินสำเร็จแต่เกิดข้อผิดพลาดในการอัปเดตยอดเงิน กรุณาติดต่อแอดมิน" });
             }
 
@@ -971,8 +1107,12 @@ async function startServer() {
         }
       }
     } catch (error: any) {
-      console.error("Verification Error:", error);
-      res.status(500).json({ success: false, error: "Verification failed: " + (error.message || "Unknown error") });
+      try {
+        handleFirestoreError(error, OperationType.GET, 'topup/verify');
+      } catch (e: any) {
+        return res.status(500).json({ success: false, error: e.message });
+      }
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 

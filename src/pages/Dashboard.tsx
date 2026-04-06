@@ -180,6 +180,10 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   <Globe className="w-4 h-4" />
                   <span>{vpn.uuid.substring(0, 8)}...</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  <span>{vpn.deviceCount || 1} อุปกรณ์</span>
+                </div>
               </div>
 
               <div className="mt-6 flex gap-2">
@@ -305,6 +309,10 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                           return formatDistanceToNow(expireDate, { locale: th });
                         })()}
                       </p>
+                    </div>
+                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                      <p className="text-xs text-slate-500 uppercase font-bold mb-1">จำนวนอุปกรณ์</p>
+                      <p className="text-white font-bold">{selectedVpn.deviceCount || 1} เครื่อง</p>
                     </div>
                   </div>
                 </div>
