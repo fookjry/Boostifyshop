@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((request.auth.token.email == "jry.fook@gmail.com" && request.auth.token.email_verified == true) || 
+         request.auth.token.email == "server@local.host" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && 
+                    (request.resource.data.role == 'user' || (request.resource.data.role == 'admin' && request.auth.token.email == "jry.fook@gmail.com")) && 
+                    request.resource.data.balance == 0;
+      allow update: if isAdmin() || (isOwner(userId) && 
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['balance', 'role']));
+    }
+
+    function isValidNetwork(data) {
+      return data.keys().hasAll(['name', 'inboundId', 'status', 'color']) &&
+             data.keys().hasOnly(['name', 'inboundId', 'status', 'color']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
+             data.inboundId is number &&
+             data.status in ['open', 'closed'] &&
+             data.color is string && data.color.size() > 0;
+    }
+
+    // Server Rules
+    match /servers/{serverId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+      
+      match /private/credentials {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Network Rules
+    match /networks/{networkId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidNetwork(request.resource.data);
+    }
+
+    // Device Options Rules
+    match /device_options/{optionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // VPN Config Rules
+    match /vpns/{vpnId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Transaction Rules
+    match /transactions/{txId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Used Slips Rules
+    match /used_slips/{slipId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Global Settings Rules
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

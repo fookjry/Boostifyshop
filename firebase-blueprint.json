@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user balance and basic info",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "balance": { "type": "number", "description": "User's current balance in THB" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["email", "balance", "role"]
+    },
+    "Server": {
+      "title": "VPN Server",
+      "description": "Configuration for 3x-ui panels",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "host": { "type": "string" },
+        "port": { "type": "number" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "offline"] }
+      },
+      "required": ["name", "host", "port", "username", "password", "status"]
+    },
+    "VPNConfig": {
+      "title": "VPN Configuration",
+      "description": "Stores generated VPN configs for users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "serverId": { "type": "string" },
+        "inboundId": { "type": "number" },
+        "uuid": { "type": "string" },
+        "config": { "type": "string" },
+        "expireAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "expired"] },
+        "network": { "type": "string", "enum": ["AIS", "TRUE"] }
+      },
+      "required": ["userId", "serverId", "inboundId", "uuid", "config", "expireAt", "status", "network"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Logs for topups and purchases",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["topup", "purchase"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      },
+      "required": ["userId", "amount", "type", "timestamp"]
+    },
+    "GlobalSettings": {
+      "title": "Global Settings",
+      "description": "Stores global app configurations like Discord invite link",
+      "type": "object",
+      "properties": {
+        "discordInvite": { "type": "string" }
+      }
+    },
+    "Network": {
+      "title": "Network Configuration",
+      "description": "Stores network settings like AIS, TRUE and their Inbound IDs",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "inboundId": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "color": { "type": "string", "description": "Tailwind color name for the network" }
+      },
+      "required": ["name", "inboundId", "status", "color"]
+    },
+    "DeviceOption": {
+      "title": "Device Option",
+      "description": "Configuration for device limits and additional pricing",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" },
+        "price": { "type": "number" },
+        "status": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["count", "price", "status", "sortOrder"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile data"
+    },
+    "/servers/{serverId}": {
+      "schema": "Server",
+      "description": "VPN server configurations"
+    },
+    "/networks/{networkId}": {
+      "schema": "Network",
+      "description": "Network configurations for VPN purchase"
+    },
+    "/device_options/{optionId}": {
+      "schema": "DeviceOption",
+      "description": "Device limit options and pricing"
+    },
+    "/vpns/{vpnId}": {
+      "schema": "VPNConfig",
+      "description": "User VPN configurations"
+    },
+    "/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Transaction history"
+    },
+    "/settings/global": {
+      "schema": "GlobalSettings",
+      "description": "Global application settings"
+    }
+  }
+}
