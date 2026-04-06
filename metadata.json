@@ -1,5 +1,5 @@
 {
-  "name": "VPN SaaS - Automated 3x-ui VPN Sales",
+  "name": "Boostifyshop",
   "description": "A full-stack VPN sales platform with automated 3x-ui integration, wallet system, and payment gateway support.",
   "requestFramePermissions": ["geolocation"]
 }
