@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import axios from "axios";
 import helmet from "helmet";
 import cors from "cors";
+import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from "express-rate-limit";
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
@@ -429,7 +430,7 @@ async function startServer() {
       const inboundPort = inbound.port;
 
       // 4. Prepare Client Data
-      const uuid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const uuid = uuidv4();
       const emailPrefix = userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').substring(0, 5);
       const clientName = `${prefix ? prefix + '-' : ''}${emailPrefix}${emailPrefix ? '-' : ''}${uuid.substring(0, 8)}`;
       const expiryTime = Date.now() + (days * 24 * 60 * 60 * 1000);

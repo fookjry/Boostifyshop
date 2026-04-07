@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, increment, addDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History } from 'lucide-react';
+import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 import { Link } from 'react-router-dom';
@@ -187,6 +187,13 @@ export function UserManagement() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center justify-end gap-3">
+                    <Link 
+                      to={`/admin/transactions?userId=${u.id}`}
+                      className="p-2 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                      title="ดูธุรกรรม"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                    </Link>
                     <button 
                       onClick={() => viewUserVpns(u.id, u.email)}
                       className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
@@ -238,12 +245,20 @@ export function UserManagement() {
                 <p className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ยอดเงินคงเหลือ</p>
                 <p className="text-xl font-bold text-emerald-400">{u.balance?.toLocaleString()} ฿</p>
               </div>
-              <button 
-                onClick={() => viewUserVpns(u.id, u.email)}
-                className="px-4 py-2 bg-blue-600/10 text-blue-500 rounded-xl text-xs font-bold"
-              >
-                ดู VPN
-              </button>
+              <div className="flex gap-2">
+                <Link 
+                  to={`/admin/transactions?userId=${u.id}`}
+                  className="px-4 py-2 bg-emerald-600/10 text-emerald-500 rounded-xl text-xs font-bold"
+                >
+                  ธุรกรรม
+                </Link>
+                <button 
+                  onClick={() => viewUserVpns(u.id, u.email)}
+                  className="px-4 py-2 bg-blue-600/10 text-blue-500 rounded-xl text-xs font-bold"
+                >
+                  ดู VPN
+                </button>
+              </div>
             </div>
           </div>
         ))}

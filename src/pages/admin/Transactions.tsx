@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { CreditCard, TrendingUp, TrendingDown, Activity, DollarSign, Settings, Save, Loader2, Upload, Trash2 } from 'lucide-react';
+import { CreditCard, TrendingUp, TrendingDown, Activity, DollarSign, Settings, Save, Loader2, Upload, Trash2, User, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
+import { useSearchParams } from 'react-router-dom';
 
 export function Transactions() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const userIdFilter = searchParams.get('userId');
   const [transactions, setTransactions] = useState<any[]>([]);
   const [userMap, setUserMap] = useState<{ [key: string]: string }>({});
   const [stats, setStats] = useState({ totalTopup: 0, totalPurchase: 0, totalRevenue: 0 });
@@ -23,21 +26,26 @@ export function Transactions() {
     const q = query(collection(db, txPath), orderBy('timestamp', 'desc'), limit(500));
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      // If userIdFilter is present, we still fetch all but filter in memory for stats/charts 
+      // or we could query specifically. For simplicity with existing code, we filter here.
+      const filteredList = userIdFilter ? list.filter(tx => tx.userId === userIdFilter) : list;
+      
       setTransactions(list);
 
-      // Aggregate stats
+      // Aggregate stats based on filtered list
       let topup = 0;
       let purchase = 0;
-      list.forEach((tx: any) => {
+      filteredList.forEach((tx: any) => {
         const amount = typeof tx.amount === 'object' ? (tx.amount.amount || 0) : (Number(tx.amount) || 0);
         if (tx.type === 'topup') topup += Math.abs(amount);
         if (tx.type === 'purchase') purchase += Math.abs(amount);
       });
       setStats({ totalTopup: topup, totalPurchase: purchase, totalRevenue: topup - purchase });
 
-      // Aggregate chart data (by date)
+      // Aggregate chart data (by date) based on filtered list
       const dailyData: { [key: string]: { date: string, topup: number, purchase: number } } = {};
-      list.forEach((tx: any) => {
+      filteredList.forEach((tx: any) => {
         const amount = typeof tx.amount === 'object' ? (tx.amount.amount || 0) : (Number(tx.amount) || 0);
         const date = new Date(tx.timestamp).toLocaleDateString();
         if (!dailyData[date]) dailyData[date] = { date, topup: 0, purchase: 0 };
@@ -98,11 +106,12 @@ export function Transactions() {
   };
 
   const filteredTransactions = transactions.filter(tx => {
+    const matchesUser = !userIdFilter || tx.userId === userIdFilter;
     const matchesMethod = filterMethod === 'all' || 
       (filterMethod === 'promptpay' && tx.note?.toLowerCase().includes('promptpay')) ||
       (filterMethod === 'truemoney' && tx.note?.toLowerCase().includes('truemoney'));
     const matchesStatus = filterStatus === 'all' || tx.type === filterStatus;
-    return matchesMethod && matchesStatus;
+    return matchesUser && matchesMethod && matchesStatus;
   });
 
   const handleSaveSettings = async () => {
@@ -129,11 +138,34 @@ export function Transactions() {
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
-      <header>
-        <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-          <CreditCard className="w-7 h-7 md:w-8 md:h-8 text-emerald-500" /> วิเคราะห์ธุรกรรม
-        </h1>
-        <p className="text-slate-400 text-sm md:text-base">ตรวจสอบรายได้ การเติมเงิน และการซื้อแบบเรียลไทม์</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
+            <CreditCard className="w-7 h-7 md:w-8 md:h-8 text-emerald-500" /> วิเคราะห์ธุรกรรม
+          </h1>
+          <p className="text-slate-400 text-sm md:text-base">ตรวจสอบรายได้ การเติมเงิน และการซื้อแบบเรียลไทม์</p>
+        </div>
+        {userIdFilter && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-2 flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-blue-400" />
+              <span className="text-blue-400 text-sm font-medium">
+                กรองโดยผู้ใช้: <span className="text-white">{userMap[userIdFilter] || userIdFilter}</span>
+              </span>
+            </div>
+            <button 
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('userId');
+                setSearchParams(newParams);
+              }}
+              className="p-1 hover:bg-blue-500/20 rounded-full text-blue-400 transition-colors"
+              title="ล้างการกรอง"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Stats Grid */}
