@@ -2,20 +2,34 @@ import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Shield, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 export function Login({ settings }: { settings: any }) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode>('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const siteName = settings?.siteName || 'VPNSaaS';
   const logoUrl = settings?.logoUrl;
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (isRegister && password !== confirmPassword) {
+      setError('รหัสผ่านไม่ตรงกัน');
+      return;
+    }
+
+    if (!isRegister && turnstileSiteKey && !turnstileToken) {
+      setError('กรุณายืนยันว่าคุณไม่ใช่โปรแกรมอัตโนมัติ');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -151,6 +165,37 @@ export function Login({ settings }: { settings: any }) {
               />
             </div>
           </div>
+
+          {isRegister && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-400">ยืนยันรหัสผ่าน</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input 
+                  type="password" 
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {!isRegister && turnstileSiteKey && (
+            <div className="flex justify-center my-4">
+              <Turnstile
+                siteKey={turnstileSiteKey}
+                onSuccess={(token) => setTurnstileToken(token)}
+                onError={() => setError('เกิดข้อผิดพลาดในการยืนยันตัวตน')}
+                onExpire={() => setTurnstileToken(null)}
+                options={{
+                  theme: 'dark'
+                }}
+              />
+            </div>
+          )}
 
           {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
 

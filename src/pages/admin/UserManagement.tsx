@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, increment, addDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server } from 'lucide-react';
+import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
+import { Link } from 'react-router-dom';
 
 export function UserManagement() {
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [viewingUser, setViewingUser] = useState<any>(null);
   const [userVpns, setUserVpns] = useState<any[]>([]);
@@ -28,9 +30,11 @@ export function UserManagement() {
     return () => unsub();
   }, []);
 
-  const filteredUsers = users.filter(u => 
-    u.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.email?.toLowerCase().includes(search.toLowerCase());
+    const matchesRole = roleFilter === 'all' || u.role === roleFilter || (!u.role && roleFilter === 'user');
+    return matchesSearch && matchesRole;
+  });
 
   const handleAddBalance = async () => {
     if (!showConfirm) return;
@@ -121,14 +125,34 @@ export function UserManagement() {
           </h1>
           <p className="text-slate-400 text-sm md:text-base">จัดการยอดเงินและ VPN ของผู้ใช้</p>
         </div>
-        <div className="relative w-full md:w-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <input 
-            placeholder="ค้นหาผู้ใช้..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none transition-colors"
-          />
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <Link 
+            to="/admin/transactions"
+            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors border border-slate-700"
+          >
+            <History className="w-4 h-4" /> ดู Transaction ล่าสุด
+          </Link>
+          <div className="relative w-full sm:w-auto">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              className="w-full sm:w-32 bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-8 py-2.5 text-sm text-white focus:border-blue-500 outline-none transition-colors appearance-none"
+            >
+              <option value="all">ทั้งหมด</option>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+          </div>
+          <div className="relative w-full sm:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input 
+              placeholder="ค้นหาผู้ใช้..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full sm:w-64 bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
         </div>
       </header>
 

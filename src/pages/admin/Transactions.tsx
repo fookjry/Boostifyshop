@@ -348,7 +348,8 @@ export function Transactions() {
             >
               <option value="all">ทุกสถานะ</option>
               <option value="topup">เติมเงิน</option>
-              <option value="purchase">ซื้อ</option>
+              <option value="purchase">ซื้อ VPN</option>
+              <option value="trial">ทดลองใช้งาน</option>
             </select>
           </div>
         </div>
