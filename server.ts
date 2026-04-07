@@ -983,60 +983,34 @@ async function startServer() {
         }
 
         try {
-          console.log(`[TrueMoney] Redeeming voucher: ${voucherHash} for mobile: ${mobile}`);
+          console.log(`[TrueMoney] Redeeming voucher via DarkX API: ${data} for mobile: ${mobile}`);
           
-          const proxyUrl = process.env.TRUEMONEY_PROXY;
-          const axiosConfig: any = {
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-              'Accept': 'application/json',
-              'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8',
-              'Referer': `https://gift.truemoney.com/campaign/?v=${voucherHash}`,
-              'Origin': 'https://gift.truemoney.com',
-              'X-Requested-With': 'XMLHttpRequest',
-              'Sec-Fetch-Dest': 'empty',
-              'Sec-Fetch-Mode': 'cors',
-              'Sec-Fetch-Site': 'same-origin'
-            },
-            timeout: 15000
-          };
+          const darkxApiKey = paymentSettings?.darkxApiKey || process.env.DARKX_API_KEY;
 
-          // Basic proxy support if provided
-          if (proxyUrl) {
-            try {
-              const url = new URL(proxyUrl);
-              axiosConfig.proxy = {
-                protocol: url.protocol.replace(':', ''),
-                host: url.hostname,
-                port: parseInt(url.port),
-              };
-              if (url.username) {
-                axiosConfig.proxy.auth = {
-                  username: decodeURIComponent(url.username),
-                  password: decodeURIComponent(url.password)
-                };
-              }
-              console.log(`[TrueMoney] Using proxy: ${url.hostname}`);
-            } catch (e) {
-              console.error("[TrueMoney] Invalid proxy URL:", proxyUrl);
-            }
+          if (!darkxApiKey) {
+            return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับรับอั่งเปา (DarkX API)" });
           }
 
-          const redeemRes = await axios.post(`https://gift.truemoney.com/campaign/v1/redeem`, {
-            mobile: mobile,
-            voucher_hash: voucherHash
-          }, axiosConfig);
+          const redeemRes = await axios.get(`https://api.darkx.shop/tools/truemoney`, {
+            params: {
+              code: data,
+              phone: mobile
+            },
+            headers: {
+              'Accept': 'application/json',
+              'x-api-key': darkxApiKey
+            },
+            timeout: 30000
+          });
           
           const resData = redeemRes.data;
-          console.log("[TrueMoney] API Response:", JSON.stringify(resData));
+          console.log("[TrueMoney DarkX] API Response:", JSON.stringify(resData));
 
-          if (resData.status?.code === 'SUCCESS') {
-            const amountStr = resData.data?.voucher?.redeemed_amount_baht || resData.data?.voucher?.amount_baht;
-            const amount = parseFloat(amountStr);
+          if (resData.status === true) {
+            const amount = parseFloat(resData.amount);
 
             if (isNaN(amount) || amount <= 0) {
-              return res.status(400).json({ success: false, error: "ไม่สามารถระบุจำนวนเงินจากอั่งเปานี้ได้" });
+              return res.status(400).json({ success: false, error: "จำนวนเงินไม่ถูกต้อง" });
             }
 
             // Update user balance and create transaction record (Atomic Transaction)
@@ -1074,22 +1048,15 @@ async function startServer() {
 
             return res.json({ success: true, amount });
           } else {
-            const errorMsg = resData.status?.message || "อั่งเปาไม่ถูกต้อง หรือถูกใช้งานไปแล้ว";
-            return res.status(400).json({ success: false, error: `TrueMoney Error: ${errorMsg}` });
+            const errorMsg = resData.msg || "ไม่สามารถรับซองอั่งเปาได้";
+            return res.status(400).json({ success: false, error: errorMsg });
           }
         } catch (error: any) {
-          const responseData = error.response?.data;
-          console.error("TrueMoney API Error:", typeof responseData === 'string' && responseData.includes('<!DOCTYPE html>') ? 'Cloudflare Blocked (HTML Response)' : responseData || error.message);
-          
-          if (typeof responseData === 'string' && responseData.includes('<!DOCTYPE html>')) {
-            return res.status(400).json({ 
-              success: false, 
-              error: "ระบบ TrueMoney ปฏิเสธการเชื่อมต่อ (Cloudflare Blocked) กรุณาลองใหม่อีกครั้งในภายหลัง หรือติดต่อแอดมิน" 
-            });
-          }
-
-          const errorMsg = responseData?.status?.message || "ไม่สามารถเชื่อมต่อกับระบบ TrueMoney ได้";
-          return res.status(400).json({ success: false, error: `ตรวจสอบอั่งเปาไม่สำเร็จ: ${errorMsg}` });
+          console.error("[TrueMoney DarkX] Error:", error.response?.data || error.message);
+          return res.status(400).json({ 
+            success: false, 
+            error: "ไม่สามารถเชื่อมต่อระบบอั่งเปาได้ กรุณาลองใหม่" 
+          });
         }
       }
     } catch (error: any) {

@@ -68,9 +68,9 @@ export function Home({ settings }: { settings: any }) {
         </div>
         <div className="grid md:grid-cols-3 gap-8">
           {[
-            { name: "รายวัน", price: "5 ฿", days: 1 },
-            { name: "รายสัปดาห์", price: "30 ฿", days: 7 },
-            { name: "รายเดือน", price: "100 ฿", days: 30 }
+            { name: "รายวัน", price: "1 ฿", days: 1 },
+            { name: "รายสัปดาห์", price: "7 ฿", days: 7 },
+            { name: "รายเดือน", price: "30 ฿", days: 30 }
           ].map((p, i) => (
             <div key={i} className="bg-slate-950 p-8 rounded-2xl border border-slate-800 flex flex-col items-center">
               <span className="text-blue-500 font-bold uppercase tracking-wider text-sm mb-2">{p.name}</span>
