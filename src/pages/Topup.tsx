@@ -292,6 +292,11 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
           </form>
         ) : (
           <div className="text-center space-y-6 py-4">
+            <div className="bg-blue-500/10 border border-blue-400/20 rounded-2xl p-4 mb-2">
+              <p className="text-blue-400 text-sm font-bold flex items-center justify-center gap-2">
+                <AlertCircle className="w-4 h-4" /> วิธีนี้ รองรับการเติมเงินขั้นต่ำ 50 บาท
+              </p>
+            </div>
             {paymentSettings.paymentQrUrl ? (
               <div className="bg-white p-4 rounded-3xl inline-block shadow-2xl">
                 <img src={paymentSettings.paymentQrUrl} alt="Payment QR" className="max-w-[240px] h-auto rounded-xl" />

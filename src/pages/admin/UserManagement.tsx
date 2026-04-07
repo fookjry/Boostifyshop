@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, increment, addDoc, query, where, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, auth } from '../../firebase';
 import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 
 export function UserManagement() {
   const [users, setUsers] = useState<any[]>([]);
@@ -103,14 +104,25 @@ export function UserManagement() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    const path = `users/${userId}`;
+  const handleDeleteUser = async (userId: string | null) => {
+    if (!userId) return;
     try {
-      await deleteDoc(doc(db, 'users', userId));
+      const token = await auth.currentUser?.getIdToken();
+      const response = await axios.delete(`/api/admin/users/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data.warning) {
+        alert(response.data.warning);
+      }
+      
       setEditingUser(null);
       setConfirmDeleteUser(null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch (error: any) {
+      console.error("Delete user failed:", error);
+      alert(error.response?.data?.error || "ไม่สามารถลบผู้ใช้ได้");
     }
   };
 
@@ -208,6 +220,13 @@ export function UserManagement() {
                     >
                       <Settings className="w-4 h-4" />
                     </button>
+                    <button 
+                      onClick={() => setConfirmDeleteUser(u.id)}
+                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="ลบผู้ใช้"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -258,6 +277,12 @@ export function UserManagement() {
                 >
                   ดู VPN
                 </button>
+                <button 
+                  onClick={() => setConfirmDeleteUser(u.id)}
+                  className="px-4 py-2 bg-red-600/10 text-red-500 rounded-xl text-xs font-bold"
+                >
+                  ลบ
+                </button>
               </div>
             </div>
           </div>
@@ -300,44 +325,6 @@ export function UserManagement() {
                   className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-colors"
                 >
                   ยืนยัน
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {confirmDeleteUser && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
-              onClick={() => setConfirmDeleteUser(null)}
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 max-w-sm w-full shadow-2xl text-center"
-            >
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-7 h-7 md:w-8 md:h-8" />
-              </div>
-              <h3 className="text-lg md:text-xl font-bold text-white mb-2">ลบผู้ใช้?</h3>
-              <p className="text-slate-400 text-sm md:text-base mb-6">การดำเนินการนี้ไม่สามารถย้อนกลับได้ และข้อมูลทั้งหมดของผู้ใช้จะหายไป</p>
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setConfirmDeleteUser(null)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button 
-                  onClick={() => handleDeleteUser(confirmDeleteUser)}
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-colors"
-                >
-                  ลบ
                 </button>
               </div>
             </motion.div>
@@ -474,6 +461,44 @@ export function UserManagement() {
                       <span className="text-[10px] font-bold text-slate-400">ลบผู้ใช้</span>
                     </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {confirmDeleteUser && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
+              onClick={() => setConfirmDeleteUser(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 max-w-sm w-full shadow-2xl text-center"
+            >
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 md:w-8 md:h-8" />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2">ลบผู้ใช้?</h3>
+              <p className="text-slate-400 text-sm md:text-base mb-6">การดำเนินการนี้ไม่สามารถย้อนกลับได้ และข้อมูลทั้งหมดของผู้ใช้จะหายไป</p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setConfirmDeleteUser(null)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  onClick={() => handleDeleteUser(confirmDeleteUser)}
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-colors"
+                >
+                  ลบ
+                </button>
               </div>
             </motion.div>
           </div>

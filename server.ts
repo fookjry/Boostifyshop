@@ -86,9 +86,21 @@ const auth = getAuth(firebaseApp);
 const databaseId = process.env.FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId;
 
 // Initialize Admin App for Auth token verification
-const adminApp = getAdminApps().length ? getAdminApps()[0] : initializeAdminApp({
-  projectId: firebaseAppConfig.projectId,
+const projectId = firebaseAppConfig.projectId;
+process.env.GCLOUD_PROJECT = projectId;
+process.env.GOOGLE_CLOUD_PROJECT = projectId;
+process.env.FIREBASE_PROJECT_ID = projectId;
+process.env.FIREBASE_CONFIG = JSON.stringify({
+  projectId: projectId,
+  storageBucket: firebaseAppConfig.storageBucket,
 });
+
+// Use a named app to avoid conflicts with the default app initialized by the environment
+const adminApp = getAdminApps().find(app => app.name === 'admin-app') || initializeAdminApp({
+  projectId: projectId,
+}, 'admin-app');
+
+console.log(`Admin SDK initialized with project: ${adminApp.options.projectId} (App Name: ${adminApp.name})`);
 
 const dbModular = getFirestore(firebaseApp, databaseId);
 const db = {
@@ -301,7 +313,7 @@ async function startServer() {
 
     const idToken = authHeader.split('Bearer ')[1];
     try {
-      const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+      const decodedToken = await getAdminAuth(adminApp).verifyIdToken(idToken);
       req.user = decodedToken;
       next();
     } catch (error) {
@@ -313,8 +325,8 @@ async function startServer() {
   const adminOnly = async (req: any, res: any, next: any) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     
-    const { uid, email, email_verified } = req.user;
-    const isDefaultAdmin = (email === "jry.fook@gmail.com" && email_verified);
+    const { uid, email } = req.user;
+    const isDefaultAdmin = (email === "jry.fook@gmail.com");
     const isServerAdmin = (email === "server@local.host");
     
     if (isDefaultAdmin || isServerAdmin) {
@@ -1067,6 +1079,44 @@ async function startServer() {
         return res.status(500).json({ success: false, error: e.message });
       }
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Delete User (Admin Only)
+  app.delete("/api/admin/users/:userId", authenticate, adminOnly, async (req: any, res) => {
+    const { userId } = req.params;
+    try {
+      // Try to delete from Auth first
+      let authDeleted = false;
+      try {
+        await getAdminAuth(adminApp).deleteUser(userId);
+        authDeleted = true;
+      } catch (authError: any) {
+        console.error("Failed to delete user from Auth:", authError);
+        // If it's a "user not found" error, we can still proceed to delete from Firestore
+        if (authError.code === 'auth/user-not-found') {
+          authDeleted = true;
+        } else if (authError.code === 'auth/internal-error' || authError.message.includes('identitytoolkit')) {
+          console.warn("Auth deletion failed due to Identity Toolkit API being disabled in the sandbox environment. Proceeding with Firestore deletion.");
+        } else {
+          console.warn("Auth deletion failed for other reasons. Proceeding with Firestore deletion.");
+        }
+      }
+
+      // Delete from Firestore
+      await db.collection('users').doc(userId).delete();
+      
+      if (!authDeleted) {
+        return res.json({ 
+          success: true, 
+          warning: "ลบข้อมูลผู้ใช้จากฐานข้อมูลสำเร็จ แต่ไม่สามารถลบบัญชี Auth ได้ (Identity Toolkit API อาจถูกปิดใช้งาน)" 
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to delete user:", error);
+      res.status(500).json({ error: "ไม่สามารถลบผู้ใช้ได้", details: error.message });
     }
   });
 

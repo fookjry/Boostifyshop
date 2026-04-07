@@ -6,10 +6,13 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with memoryLocalCache to prevent IndexedDB connection errors in iframe
+const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
+console.log(`Initializing Firestore with database: ${databaseId}`);
+
 export const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId || '(default)');
+  experimentalAutoDetectLongPolling: true,
+}, databaseId);
 
 export const auth = getAuth(app);
 

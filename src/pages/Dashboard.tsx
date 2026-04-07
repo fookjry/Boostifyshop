@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Shield, Copy, QrCode, Clock, Server, Globe, CheckCircle2, AlertCircle, MessageSquare, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, Copy, QrCode, Clock, Server, Globe, CheckCircle2, AlertCircle, MessageSquare, Gift, ChevronLeft, ChevronRight, Settings, Key, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 

@@ -13,7 +13,7 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        ((request.auth.token.email == "jry.fook@gmail.com" && request.auth.token.email_verified == true) || 
+        (request.auth.token.email == "jry.fook@gmail.com" || 
          request.auth.token.email == "server@local.host" ||
          request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
@@ -21,14 +21,23 @@ service cloud.firestore {
     }
 
     // User Profile Rules
+    function isValidUser(data) {
+      return data.email is string && data.email.size() < 100 &&
+             data.balance is number &&
+             data.role in ['user', 'admin'];
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && 
+                    isValidUser(request.resource.data) &&
                     (request.resource.data.role == 'user' || 
                      (request.resource.data.role == 'admin' && (request.auth.token.email == "jry.fook@gmail.com" || request.auth.token.email == "server@local.host" || request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2"))) && 
                     request.resource.data.balance == 0;
       allow update: if isAdmin() || (isOwner(userId) && 
+                    isValidUser(request.resource.data) &&
                     !request.resource.data.diff(resource.data).affectedKeys().hasAny(['balance', 'role']));
+      allow delete: if isAdmin();
     }
 
     function isValidNetwork(data) {
@@ -62,10 +71,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    function isValidVPN(data) {
+      return data.userId is string &&
+             data.serverId is string &&
+             data.uuid is string && data.uuid.size() < 100 &&
+             data.config is string && data.config.size() < 5000 &&
+             data.expireAt is string &&
+             data.status in ['active', 'expired'] &&
+             data.network in ['AIS', 'TRUE'];
+    }
+
     // VPN Config Rules
     match /vpns/{vpnId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() && isValidVPN(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // Transaction Rules

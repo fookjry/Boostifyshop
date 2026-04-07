@@ -30,7 +30,24 @@ export default function App() {
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
       if (doc.exists()) {
-        setSettings(doc.data());
+        const data = doc.data();
+        setSettings(data);
+        
+        // Update document title
+        if (data.siteName) {
+          document.title = data.siteName;
+        }
+        
+        // Update favicon
+        if (data.logoUrl) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = data.logoUrl;
+        }
       }
     });
 
