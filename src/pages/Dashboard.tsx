@@ -75,8 +75,8 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">แดชบอร์ด VPN ของฉัน</h1>
-          <p className="text-slate-400">จัดการการตั้งค่าและการใช้งานของคุณ</p>
+          <h1 className="text-3xl font-bold text-white drop-shadow-md">แดชบอร์ด VPN ของฉัน</h1>
+          <p className="text-slate-300">จัดการการตั้งค่าและการใช้งานของคุณ</p>
         </div>
         <div className="flex items-center gap-4">
           {discordInvite && (
@@ -84,25 +84,25 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
               href={discordInvite}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-4 rounded-2xl flex items-center gap-3 font-bold transition-all shadow-lg shadow-indigo-500/20"
+              className="bg-[#5865F2]/80 hover:bg-[#5865F2] text-white px-6 py-4 rounded-2xl flex items-center gap-3 font-bold transition-all shadow-[0_0_15px_rgba(88,101,242,0.3)] backdrop-blur-md border border-[#5865F2]/50"
             >
               <MessageSquare className="w-6 h-6 fill-white" />
               <span>ติดต่อ Discord</span>
             </a>
           )}
-          <div className="bg-slate-900 px-6 py-4 rounded-2xl border border-slate-800 flex items-center gap-4">
-            <div className="bg-emerald-500/10 p-3 rounded-xl">
-              <Shield className="w-6 h-6 text-emerald-500" />
+          <div className="glass-panel px-6 py-4 flex items-center gap-4">
+            <div className="bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/30">
+              <Shield className="w-6 h-6 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">การตั้งค่าที่ใช้งานอยู่</p>
-              <p className="text-2xl font-bold text-white">{vpns.filter(v => new Date(v.expireAt).getTime() > Date.now()).length}</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">การตั้งค่าที่ใช้งานอยู่</p>
+              <p className="text-2xl font-bold text-white drop-shadow-md">{vpns.filter(v => new Date(v.expireAt).getTime() > Date.now()).length}</p>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex p-1 bg-slate-900 rounded-2xl border border-slate-800 w-full max-w-md">
+      <div className="flex p-1 glass-panel w-full max-w-md">
         {[
           { id: 'all', label: 'ทั้งหมด' },
           { id: 'active', label: 'ใช้งานอยู่' },
@@ -113,8 +113,8 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
             onClick={() => setFilter(tab.id as any)}
             className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
               filter === tab.id 
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'bg-blue-600/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] border border-blue-500/50 backdrop-blur-md' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             {tab.label}
@@ -124,7 +124,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
 
       {loading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => <div key={i} className="h-48 bg-slate-900 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="h-48 glass-panel animate-pulse" />)}
         </div>
       ) : filteredVpns.length > 0 ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -133,23 +133,23 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
               key={vpn.id}
               layoutId={vpn.id}
               onClick={() => setSelectedVpn(vpn)}
-              className="bg-slate-900 p-6 rounded-2xl border border-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group"
+              className="glass-card p-6 cursor-pointer group"
             >
               <div className="flex justify-between items-start mb-4">
-                <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${vpn.network === 'AIS' ? 'bg-lime-500/10 text-lime-500' : 'bg-red-500/10 text-red-500'}`}>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${vpn.network === 'AIS' ? 'bg-lime-500/20 text-lime-400 border-lime-500/30 shadow-[0_0_8px_rgba(132,204,22,0.3)]' : 'bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]'}`}>
                   {vpn.network}
                 </div>
                 <div className="flex items-center gap-2">
                   {vpn.isTrial && (
-                    <div className="bg-amber-500/20 text-amber-500 px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
+                    <div className="bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 border border-amber-500/30 shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                       <Gift className="w-3 h-3" /> ทดลองใช้งาน
                     </div>
                   )}
                   {(() => {
                     const isExpired = new Date(vpn.expireAt) <= new Date();
                     return (
-                      <div className={`flex items-center gap-1 text-xs font-bold ${!isExpired ? 'text-emerald-500' : 'text-red-500'}`}>
-                        <div className={`w-2 h-2 rounded-full ${!isExpired ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                      <div className={`flex items-center gap-1 text-xs font-bold ${!isExpired ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <div className={`w-2 h-2 rounded-full ${!isExpired ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.8)]'}`} />
                         {!isExpired ? 'ใช้งานอยู่' : 'หมดอายุ'}
                       </div>
                     );
@@ -157,14 +157,14 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                <Server className="w-4 h-4 text-slate-500" />
+              <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2 drop-shadow-sm">
+                <Server className="w-4 h-4 text-blue-400" />
                 {vpn.serverName || 'Singapore Premium'}
               </h3>
 
-              <div className="space-y-2 text-sm text-slate-400">
+              <div className="space-y-2 text-sm text-slate-300">
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
+                  <Clock className="w-4 h-4 text-slate-400" />
                   {(() => {
                     const expireDate = new Date(vpn.expireAt);
                     const now = new Date();
@@ -178,11 +178,11 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4" />
+                  <Globe className="w-4 h-4 text-slate-400" />
                   <span>{vpn.uuid.substring(0, 8)}...</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-4 h-4 text-slate-400" />
                   <span>{vpn.deviceCount || 1} อุปกรณ์</span>
                 </div>
               </div>
@@ -190,11 +190,11 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
               <div className="mt-6 flex gap-2">
                 <button 
                   onClick={(e) => { e.stopPropagation(); copyToClipboard(vpn.config); }}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 border border-white/10 backdrop-blur-sm"
                 >
                   <Copy className="w-4 h-4" /> คัดลอก
                 </button>
-                <button className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors">
+                <button className="glass-button p-2 rounded-lg">
                   <QrCode className="w-5 h-5" />
                 </button>
               </div>
@@ -202,11 +202,11 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
           ))}
         </div>
       ) : (
-        <div className="text-center py-24 bg-slate-900/50 rounded-3xl border border-dashed border-slate-800">
-          <Shield className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white">ไม่พบ VPN</h3>
-          <p className="text-slate-500 mb-8 text-sm">คุณยังไม่ได้ซื้อการตั้งค่า VPN ใดๆ</p>
-          <Link to="/buy" className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all">
+        <div className="text-center py-24 glass-panel border-dashed">
+          <Shield className="w-16 h-16 text-slate-500 mx-auto mb-4 drop-shadow-md" />
+          <h3 className="text-xl font-bold text-white drop-shadow-md">ไม่พบ VPN</h3>
+          <p className="text-slate-400 mb-8 text-sm">คุณยังไม่ได้ซื้อการตั้งค่า VPN ใดๆ</p>
+          <Link to="/buy" className="glass-button px-8 py-3">
             ซื้อ VPN ตัวแรกของคุณ
           </Link>
         </div>
@@ -218,7 +218,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
           <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-xl glass-panel text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -229,8 +229,8 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
               onClick={() => setCurrentPage(page)}
               className={`w-10 h-10 rounded-xl font-bold transition-all ${
                 currentPage === page
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-900 border border-slate-800 text-slate-500 hover:text-slate-300'
+                  ? 'bg-blue-600/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] border border-blue-500/50 backdrop-blur-md'
+                  : 'glass-panel text-slate-400 hover:text-white hover:bg-white/10'
               }`}
             >
               {page}
@@ -240,7 +240,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
           <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-xl glass-panel text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -256,48 +256,48 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedVpn(null)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 p-8 shadow-2xl overflow-hidden"
+              className="relative glass-panel w-full max-w-lg p-8 shadow-2xl overflow-hidden"
             >
               <div className="flex justify-between items-start mb-8">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">การตั้งค่า VPN</h2>
-                  <p className="text-slate-400 text-sm">นำเข้านี้ไปยังแอป V2Ray/V2Box ของคุณ</p>
+                  <h2 className="text-2xl font-bold text-white drop-shadow-md">การตั้งค่า VPN</h2>
+                  <p className="text-slate-300 text-sm">นำเข้านี้ไปยังแอป V2Ray/V2Box ของคุณ</p>
                 </div>
-                <button onClick={() => setSelectedVpn(null)} className="text-slate-500 hover:text-white">
+                <button onClick={() => setSelectedVpn(null)} className="text-slate-400 hover:text-white transition-colors">
                   <AlertCircle className="w-6 h-6 rotate-45" />
                 </button>
               </div>
 
               <div className="flex flex-col items-center gap-8">
-                <div className="bg-white p-4 rounded-2xl shadow-xl">
+                <div className="bg-white/90 p-4 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.2)] backdrop-blur-sm border border-white/20">
                   <QRCodeSVG value={selectedVpn.config} size={200} />
                 </div>
 
                 <div className="w-full space-y-4">
-                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 break-all text-xs font-mono text-blue-400 relative group">
+                  <div className="bg-black/40 p-4 rounded-xl border border-white/10 break-all text-xs font-mono text-blue-300 relative group backdrop-blur-md shadow-inner">
                     {selectedVpn.config}
                     <button 
                       onClick={() => copyToClipboard(selectedVpn.config)}
-                      className="absolute top-2 right-2 bg-slate-800 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all border border-white/10"
                     >
-                      <Copy className="w-3 h-3" />
+                      <Copy className="w-3 h-3 text-white" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                      <p className="text-xs text-slate-500 uppercase font-bold mb-1">เครือข่าย</p>
-                      <p className="text-white font-bold">{selectedVpn.network}</p>
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                      <p className="text-xs text-slate-400 uppercase font-bold mb-1">เครือข่าย</p>
+                      <p className="text-white font-bold drop-shadow-sm">{selectedVpn.network}</p>
                     </div>
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                      <p className="text-xs text-slate-500 uppercase font-bold mb-1">หมดอายุใน</p>
-                      <p className="text-white font-bold">
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                      <p className="text-xs text-slate-400 uppercase font-bold mb-1">หมดอายุใน</p>
+                      <p className="text-white font-bold drop-shadow-sm">
                         {(() => {
                           const expireDate = new Date(selectedVpn.expireAt);
                           const now = new Date();
@@ -311,9 +311,9 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                         })()}
                       </p>
                     </div>
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                      <p className="text-xs text-slate-500 uppercase font-bold mb-1">จำนวนอุปกรณ์</p>
-                      <p className="text-white font-bold">{selectedVpn.deviceCount || 1} เครื่อง</p>
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                      <p className="text-xs text-slate-400 uppercase font-bold mb-1">จำนวนอุปกรณ์</p>
+                      <p className="text-white font-bold drop-shadow-sm">{selectedVpn.deviceCount || 1} เครื่อง</p>
                     </div>
                   </div>
                 </div>
@@ -330,7 +330,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 font-bold"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-[0_0_20px_rgba(52,211,153,0.4)] flex items-center gap-3 font-bold border border-emerald-400/50"
           >
             <CheckCircle2 className="w-5 h-5" />
             <span>คัดลอกการตั้งค่าไปยังคลิปบอร์ดแล้ว!</span>

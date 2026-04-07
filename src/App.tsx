@@ -115,26 +115,34 @@ export default function App() {
   return (
     <ErrorBoundary>
       <Router>
-        <div className="min-h-screen bg-slate-950 text-slate-200 font-sans">
-          <Navbar user={user} profile={profile} settings={settings} />
-          <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
-            <Routes>
-              <Route path="/" element={<Home settings={settings} />} />
-              <Route path="/login" element={!user ? <Login settings={settings} /> : <Navigate to="/dashboard" />} />
-              <Route path="/dashboard" element={user ? <Dashboard user={user} profile={profile} /> : <Navigate to="/login" />} />
-              <Route path="/buy" element={user ? <BuyVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
-              <Route path="/topup" element={user ? <Topup user={user} profile={profile} /> : <Navigate to="/login" />} />
-              <Route path="/tutorial" element={<Tutorial />} />
-              
-              {/* Admin Routes */}
-              <Route path="/admin" element={profile?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
-              <Route path="/admin/users" element={profile?.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
-              <Route path="/admin/servers" element={profile?.role === 'admin' ? <ServerManagement /> : <Navigate to="/" />} />
-              <Route path="/admin/networks" element={profile?.role === 'admin' ? <NetworkManagement /> : <Navigate to="/" />} />
-              <Route path="/admin/devices" element={profile?.role === 'admin' ? <AdminDeviceOptions /> : <Navigate to="/" />} />
-              <Route path="/admin/transactions" element={profile?.role === 'admin' ? <Transactions /> : <Navigate to="/" />} />
-            </Routes>
-          </main>
+        <div className="min-h-screen bg-slate-950 text-slate-200 font-sans relative overflow-hidden">
+          {/* Animated Background Blobs */}
+          <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+            <div className="blob blob-1"></div>
+            <div className="blob blob-2"></div>
+          </div>
+
+          <div className="relative z-10">
+            <Navbar user={user} profile={profile} settings={settings} />
+            <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+              <Routes>
+                <Route path="/" element={<Home settings={settings} />} />
+                <Route path="/login" element={!user ? <Login settings={settings} /> : <Navigate to="/dashboard" />} />
+                <Route path="/dashboard" element={user ? <Dashboard user={user} profile={profile} /> : <Navigate to="/login" />} />
+                <Route path="/buy" element={user ? <BuyVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
+                <Route path="/topup" element={user ? <Topup user={user} profile={profile} /> : <Navigate to="/login" />} />
+                <Route path="/tutorial" element={<Tutorial />} />
+                
+                {/* Admin Routes */}
+                <Route path="/admin" element={profile?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
+                <Route path="/admin/users" element={profile?.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
+                <Route path="/admin/servers" element={profile?.role === 'admin' ? <ServerManagement /> : <Navigate to="/" />} />
+                <Route path="/admin/networks" element={profile?.role === 'admin' ? <NetworkManagement /> : <Navigate to="/" />} />
+                <Route path="/admin/devices" element={profile?.role === 'admin' ? <AdminDeviceOptions /> : <Navigate to="/" />} />
+                <Route path="/admin/transactions" element={profile?.role === 'admin' ? <Transactions /> : <Navigate to="/" />} />
+              </Routes>
+            </main>
+          </div>
         </div>
       </Router>
     </ErrorBoundary>

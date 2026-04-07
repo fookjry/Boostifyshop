@@ -34,15 +34,15 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
 
   return (
     <>
-      <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+      <nav className="glass-panel sticky top-0 z-50 border-b-0 border-white/10">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-xl font-bold text-white">
             {logoUrl ? (
-              <img src={logoUrl} alt={siteName} className="w-8 h-8 object-contain" />
+              <img src={logoUrl} alt={siteName} className="w-8 h-8 object-contain drop-shadow-lg" />
             ) : (
-              <ShieldCheck className="w-8 h-8 text-blue-500" />
+              <ShieldCheck className="w-8 h-8 text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
             )}
-            <span className="hidden sm:inline">{siteName}</span>
+            <span className="hidden sm:inline bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">{siteName}</span>
           </Link>
 
           <div className="flex items-center gap-6">
@@ -55,7 +55,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                       <Link 
                         key={link.to} 
                         to={link.to} 
-                        className={`transition-colors ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`}
+                        className={`transition-all duration-300 ${isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-slate-300 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
                       >
                         {link.label}
                       </Link>
@@ -66,7 +66,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                   <div className="relative">
                     <button 
                       onClick={() => setShowAdminMenu(!showAdminMenu)}
-                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors"
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-all drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]"
                     >
                       แอดมิน <ChevronDown className={`w-4 h-4 transition-transform ${showAdminMenu ? 'rotate-180' : ''}`} />
                     </button>
@@ -79,14 +79,14 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                            className="absolute top-full right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-10"
+                            className="absolute top-full right-0 mt-2 w-48 glass-panel rounded-xl overflow-hidden z-10"
                           >
                             {adminLinks.map(link => (
                               <Link 
                                 key={link.to}
                                 to={link.to}
                                 onClick={() => setShowAdminMenu(false)}
-                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
                               >
                                 <link.icon className="w-4 h-4" />
                                 {link.label}
@@ -101,18 +101,18 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
               </div>
 
                 <div className="flex items-center gap-2 sm:gap-4">
-                  <Link to="/topup" className="flex items-center gap-2 bg-slate-800 px-2 sm:px-3 py-1.5 rounded-full border border-slate-700 hover:bg-slate-700 transition-colors">
-                    <Wallet className="w-4 h-4 text-emerald-400" />
-                    <span className="font-bold text-emerald-400 text-xs sm:text-sm">{profile?.balance?.toLocaleString()} ฿</span>
+                  <Link to="/topup" className="flex items-center gap-2 bg-black/20 px-2 sm:px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-all backdrop-blur-md">
+                    <Wallet className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                    <span className="font-bold text-emerald-400 text-xs sm:text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">{profile?.balance?.toLocaleString()} ฿</span>
                   </Link>
                   
-                  <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-white transition-colors">
+                  <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-white transition-all hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
                     <LogOut className="w-5 h-5" />
                   </button>
                 </div>
               </>
             ) : (
-              <Link to="/login" className="bg-blue-600 hover:bg-blue-500 text-white px-4 sm:px-6 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
+              <Link to="/login" className="glass-button px-4 sm:px-6 py-2 text-sm sm:text-base">
                 เริ่มต้นใช้งาน
               </Link>
             )}
@@ -122,7 +122,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
 
       {/* Bottom Navigation for Mobile */}
       {user && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 pb-safe">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel border-t-0 border-white/10 z-50 pb-safe">
           <div className="flex items-center justify-around h-16">
             {navLinks.map(link => {
               const isActive = location.pathname === link.to;
@@ -130,7 +130,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                 <Link 
                   key={link.to} 
                   to={link.to} 
-                  className={`flex flex-col items-center justify-center gap-1 transition-colors px-2 ${isActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`flex flex-col items-center justify-center gap-1 transition-all px-2 ${isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-slate-400 hover:text-white'}`}
                 >
                   <link.icon className="w-5 h-5" />
                   <span className="text-[10px] font-medium">{link.label}</span>
@@ -140,7 +140,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
             {profile?.role === 'admin' && (
               <Link 
                 to="/admin" 
-                className={`flex flex-col items-center justify-center gap-1 transition-colors px-2 ${location.pathname.startsWith('/admin') ? 'text-amber-400' : 'text-slate-500 hover:text-amber-300'}`}
+                className={`flex flex-col items-center justify-center gap-1 transition-all px-2 ${location.pathname.startsWith('/admin') ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-400 hover:text-amber-300'}`}
               >
                 <ShieldCheck className="w-5 h-5" />
                 <span className="text-[10px] font-medium">แอดมิน</span>

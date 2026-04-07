@@ -170,14 +170,14 @@ export function NetworkManagement() {
     <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-            <Wifi className="w-7 h-7 md:w-8 md:h-8 text-blue-500" /> จัดการเครือข่าย
+          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3 drop-shadow-md">
+            <Wifi className="w-7 h-7 md:w-8 md:h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> จัดการเครือข่าย
           </h1>
-          <p className="text-slate-400 text-sm md:text-base">ตั้งค่าเครือข่ายและ Inbound ID สำหรับการซื้อ VPN</p>
+          <p className="text-slate-300 text-sm md:text-base">ตั้งค่าเครือข่ายและ Inbound ID สำหรับการซื้อ VPN</p>
         </div>
         <button 
           onClick={() => setShowAddModal(true)}
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20"
+          className="w-full md:w-auto glass-button px-6 py-3 font-bold flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" /> เพิ่มเครือข่ายใหม่
         </button>
@@ -187,66 +187,66 @@ export function NetworkManagement() {
         {networks.map(n => {
           const color = n.color || 'emerald';
           const colorClasses: Record<string, string> = {
-            emerald: n.status === 'open' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500',
-            red: n.status === 'open' ? 'bg-red-500/10 text-red-500' : 'bg-red-500/10 text-red-500',
-            blue: n.status === 'open' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500',
-            orange: n.status === 'open' ? 'bg-orange-500/10 text-orange-500' : 'bg-red-500/10 text-red-500',
-            purple: n.status === 'open' ? 'bg-purple-500/10 text-purple-500' : 'bg-red-500/10 text-red-500',
-            pink: n.status === 'open' ? 'bg-pink-500/10 text-pink-500' : 'bg-red-500/10 text-red-500',
-            indigo: n.status === 'open' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-red-500/10 text-red-500',
-            amber: n.status === 'open' ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500',
+            emerald: n.status === 'open' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            red: n.status === 'open' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            blue: n.status === 'open' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            orange: n.status === 'open' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            purple: n.status === 'open' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            pink: n.status === 'open' ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            indigo: n.status === 'open' ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
+            amber: n.status === 'open' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30',
           };
           const glowClasses: Record<string, string> = {
-            emerald: 'bg-emerald-500/5',
-            red: 'bg-red-500/5',
-            blue: 'bg-blue-500/5',
-            orange: 'bg-orange-500/5',
-            purple: 'bg-purple-500/5',
-            pink: 'bg-pink-500/5',
-            indigo: 'bg-indigo-500/5',
-            amber: 'bg-amber-500/5',
+            emerald: 'bg-emerald-500/10',
+            red: 'bg-red-500/10',
+            blue: 'bg-blue-500/10',
+            orange: 'bg-orange-500/10',
+            purple: 'bg-purple-500/10',
+            pink: 'bg-pink-500/10',
+            indigo: 'bg-indigo-500/10',
+            amber: 'bg-amber-500/10',
           };
 
           return (
-            <div key={n.id} className="bg-slate-900 p-5 md:p-6 rounded-3xl border border-slate-800 relative group overflow-hidden">
+            <div key={n.id} className="glass-panel p-5 md:p-6 relative group overflow-hidden hover:bg-white/5 transition-colors">
               <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -mr-16 -mt-16 ${glowClasses[color] || glowClasses.emerald}`} />
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div className="flex items-center gap-3 md:gap-4">
-                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center ${colorClasses[color] || colorClasses.emerald}`}>
-                    <Wifi className="w-5 h-5 md:w-6 md:h-6" />
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center border shadow-inner ${colorClasses[color] || colorClasses.emerald}`}>
+                    <Wifi className="w-5 h-5 md:w-6 md:h-6 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]" />
                   </div>
                   <div>
-                    <h3 className="text-base md:text-lg font-bold text-white">{n.name}</h3>
+                    <h3 className="text-base md:text-lg font-bold text-white drop-shadow-sm">{n.name}</h3>
                     <div className="flex items-center gap-2">
-                      <Hash className="w-3 h-3 text-slate-500" />
-                      <p className="text-[10px] md:text-xs text-slate-500 font-mono">Inbound ID: {n.inboundId}</p>
+                      <Hash className="w-3 h-3 text-slate-400" />
+                      <p className="text-[10px] md:text-xs text-slate-400 font-mono">Inbound ID: {n.inboundId}</p>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <button 
                     onClick={() => setEditingNetwork(n)}
-                    className="p-2 bg-slate-800 text-slate-400 hover:text-blue-400 rounded-lg transition-colors"
+                    className="p-2 bg-black/20 text-slate-400 hover:text-blue-400 rounded-lg transition-colors border border-transparent hover:border-blue-500/30 backdrop-blur-sm"
                   >
                     <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   </button>
                   <button 
                     onClick={() => toggleNetwork(n.id, n.status)}
-                    className={`p-2 rounded-lg transition-colors ${n.status === 'open' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'}`}
+                    className={`p-2 rounded-lg transition-colors border backdrop-blur-sm ${n.status === 'open' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'}`}
                   >
                     <Power className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   </button>
                   <button 
                     onClick={() => setConfirmDelete(n.id)}
-                    className="p-2 bg-slate-800 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
+                    className="p-2 bg-black/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors border border-transparent hover:border-red-500/30 backdrop-blur-sm"
                   >
                     <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-4 border-t border-slate-800 relative z-10">
-                <span className="text-[10px] uppercase font-black text-slate-500 tracking-widest">สถานะการขาย</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${n.status === 'open' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+              <div className="flex items-center justify-between pt-4 border-t border-white/10 relative z-10">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">สถานะการขาย</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${n.status === 'open' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
                   {n.status === 'open' ? 'เปิดการขาย' : 'ปิดการขาย'}
                 </span>
               </div>
@@ -262,30 +262,30 @@ export function NetworkManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
               onClick={() => setConfirmDelete(null)}
             />
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 max-w-sm w-full shadow-2xl text-center"
+              className="relative glass-panel p-6 md:p-8 max-w-sm w-full shadow-2xl text-center"
             >
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-7 h-7 md:w-8 md:h-8" />
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                <Trash2 className="w-7 h-7 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
               </div>
-              <h3 className="text-lg md:text-xl font-bold text-white mb-2">ลบเครือข่าย?</h3>
-              <p className="text-slate-400 text-sm md:text-base mb-6">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2 drop-shadow-sm">ลบเครือข่าย?</h3>
+              <p className="text-slate-300 text-sm md:text-base mb-6">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
               <div className="flex gap-4">
                 <button 
                   onClick={() => setConfirmDelete(null)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-colors border border-white/10 backdrop-blur-sm"
                 >
                   ยกเลิก
                 </button>
                 <button 
                   onClick={() => deleteNetwork(confirmDelete)}
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-colors"
+                  className="flex-1 bg-red-600/80 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-colors border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)] backdrop-blur-md"
                 >
                   ลบ
                 </button>
@@ -300,7 +300,7 @@ export function NetworkManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
               onClick={() => { setShowAddModal(false); setEditingNetwork(null); }}
             />
             <motion.div 
@@ -308,9 +308,9 @@ export function NetworkManagement() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="relative bg-slate-900 p-6 pb-10 md:p-8 rounded-t-[32px] md:rounded-[40px] border-t md:border border-slate-800 max-w-md w-full shadow-2xl"
+              className="relative glass-panel p-6 pb-10 md:p-8 rounded-t-[32px] md:rounded-[40px] max-w-md w-full shadow-2xl"
             >
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-800 rounded-full md:hidden mb-4" />
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/20 rounded-full md:hidden mb-4" />
               {showAddModal ? (
                 <NetworkForm 
                   title="เพิ่มเครือข่ายใหม่"

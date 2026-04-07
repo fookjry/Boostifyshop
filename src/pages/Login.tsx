@@ -122,29 +122,29 @@ export function Login({ settings }: { settings: any }) {
 
   return (
     <div className="max-w-md mx-auto mt-12">
-      <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+      <div className="glass-card p-8">
         <div className="text-center mb-8">
-          <div className="bg-blue-600/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 overflow-hidden">
+          <div className="bg-blue-600/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 overflow-hidden border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
             {logoUrl ? (
               <img src={logoUrl} alt={siteName} className="w-full h-full object-contain" />
             ) : (
-              <Shield className="w-8 h-8 text-blue-500" />
+              <Shield className="w-8 h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
             )}
           </div>
-          <h2 className="text-2xl font-bold text-white">{isRegister ? 'สร้างบัญชี' : 'ยินดีต้อนรับกลับมา'}</h2>
-          <p className="text-slate-400">เข้าสู่แดชบอร์ด {siteName} ความเร็วสูงของคุณ</p>
+          <h2 className="text-2xl font-bold text-white drop-shadow-md">{isRegister ? 'สร้างบัญชี' : 'ยินดีต้อนรับกลับมา'}</h2>
+          <p className="text-slate-300">เข้าสู่แดชบอร์ด {siteName} ความเร็วสูงของคุณ</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-400">ที่อยู่อีเมล</label>
+            <label className="text-sm font-medium text-slate-300">ที่อยู่อีเมล</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                className="glass-input w-full pl-11 pr-4"
                 placeholder="name@example.com"
                 required
               />
@@ -152,14 +152,14 @@ export function Login({ settings }: { settings: any }) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-400">รหัสผ่าน</label>
+            <label className="text-sm font-medium text-slate-300">รหัสผ่าน</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                className="glass-input w-full pl-11 pr-4"
                 placeholder="••••••••"
                 required
               />
@@ -168,14 +168,14 @@ export function Login({ settings }: { settings: any }) {
 
           {isRegister && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-400">ยืนยันรหัสผ่าน</label>
+              <label className="text-sm font-medium text-slate-300">ยืนยันรหัสผ่าน</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input 
                   type="password" 
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                  className="glass-input w-full pl-11 pr-4"
                   placeholder="••••••••"
                   required
                 />
@@ -197,11 +197,11 @@ export function Login({ settings }: { settings: any }) {
             </div>
           )}
 
-          {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
+          {error && <p className="text-red-400 text-sm bg-red-500/10 p-3 rounded-xl border border-red-500/20 backdrop-blur-sm">{error}</p>}
 
           <button 
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+            className="w-full glass-button py-3 flex items-center justify-center gap-2 mt-6"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isRegister ? 'ลงทะเบียน' : 'เข้าสู่ระบบ')}
           </button>
@@ -209,20 +209,20 @@ export function Login({ settings }: { settings: any }) {
 
         <div className="mt-6 space-y-4">
           <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
-            <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-900 px-2 text-slate-500">หรือดำเนินการต่อด้วย</span></div>
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
+            <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0f172a] px-2 text-slate-400">หรือดำเนินการต่อด้วย</span></div>
           </div>
 
           <button 
             onClick={() => handleGoogle()}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-slate-700"
+            className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-white/10 backdrop-blur-sm"
           >
             <Chrome className="w-5 h-5" /> Google
           </button>
 
-          <p className="text-center text-slate-400 text-sm">
+          <p className="text-center text-slate-300 text-sm">
             {isRegister ? 'มีบัญชีอยู่แล้วใช่ไหม?' : "ยังไม่มีบัญชีใช่ไหม?"}{' '}
-            <button onClick={() => setIsRegister(!isRegister)} className="text-blue-500 hover:underline font-medium">
+            <button onClick={() => setIsRegister(!isRegister)} className="text-blue-400 hover:text-blue-300 hover:underline font-medium transition-colors">
               {isRegister ? 'เข้าสู่ระบบ' : 'ลงทะเบียนตอนนี้'}
             </button>
           </p>

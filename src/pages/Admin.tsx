@@ -129,10 +129,10 @@ export function Admin() {
   return (
     <div className="space-y-12 pb-24">
       <header>
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-          <ShieldAlert className="w-8 h-8 text-amber-500" /> แผงควบคุมแอดมิน
+        <h1 className="text-3xl font-bold text-white flex items-center gap-3 drop-shadow-md">
+          <ShieldAlert className="w-8 h-8 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" /> แผงควบคุมแอดมิน
         </h1>
-        <p className="text-slate-400">ภาพรวมระบบและทางลัดการจัดการ</p>
+        <p className="text-slate-300">ภาพรวมระบบและทางลัดการจัดการ</p>
       </header>
 
       {/* Stats Grid */}
@@ -143,10 +143,10 @@ export function Admin() {
           { label: 'เซิร์ฟเวอร์', value: stats.serverCount, icon: Server, color: 'amber' },
           { label: 'บันทึกล่าสุด', value: recentTransactions.length, icon: CreditCard, color: 'emerald' }
         ].map((s, i) => (
-          <div key={i} className="bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-800">
-            <s.icon className={`w-6 h-6 md:w-8 md:h-8 text-${s.color}-500 mb-3 md:mb-4`} />
-            <p className="text-[10px] md:text-xs text-slate-500 uppercase font-bold tracking-wider">{s.label}</p>
-            <p className="text-xl md:text-2xl font-bold text-white">{s.value}</p>
+          <div key={i} className="glass-panel p-4 md:p-6">
+            <s.icon className={`w-6 h-6 md:w-8 md:h-8 text-${s.color}-400 mb-3 md:mb-4 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]`} />
+            <p className="text-[10px] md:text-xs text-slate-400 uppercase font-bold tracking-wider">{s.label}</p>
+            <p className="text-xl md:text-2xl font-bold text-white drop-shadow-sm">{s.value}</p>
           </div>
         ))}
       </div>
@@ -157,62 +157,62 @@ export function Admin() {
           <Link 
             key={i} 
             to={item.to}
-            className="group bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 hover:border-blue-500/50 transition-all hover:shadow-2xl hover:shadow-blue-500/10"
+            className="group glass-panel p-6 md:p-8 hover:border-blue-500/50 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:bg-white/5"
           >
-            <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-${item.color}-500/10 flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform`}>
-              <item.icon className={`w-6 h-6 md:w-7 md:h-7 text-${item.color}-500`} />
+            <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-${item.color}-500/20 flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform border border-${item.color}-500/30 shadow-[0_0_10px_rgba(currentColor,0.2)]`}>
+              <item.icon className={`w-6 h-6 md:w-7 md:h-7 text-${item.color}-400 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]`} />
             </div>
-            <h3 className="text-lg md:text-xl font-bold text-white mb-2 flex items-center justify-between">
+            <h3 className="text-lg md:text-xl font-bold text-white mb-2 flex items-center justify-between drop-shadow-sm">
               {item.label}
-              <ChevronRight className="w-4 h-4 md:w-5 h-5 text-slate-600 group-hover:text-white transition-colors" />
+              <ChevronRight className="w-4 h-4 md:w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
             </h3>
-            <p className="text-slate-400 text-xs md:text-sm">{item.desc}</p>
+            <p className="text-slate-300 text-xs md:text-sm">{item.desc}</p>
           </Link>
         ))}
       </div>
 
       {/* Global & Payment Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800">
+        <section className="glass-panel p-6 md:p-8">
           <div className="flex items-center gap-4 mb-6">
-            <div className="bg-indigo-500/10 p-3 rounded-2xl">
-              <MessageSquare className="w-6 h-6 text-indigo-500" />
+            <div className="bg-indigo-500/20 p-3 rounded-2xl border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+              <MessageSquare className="w-6 h-6 text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">ตั้งค่าทั่วไป</h3>
-              <p className="text-slate-400 text-sm">ตั้งค่าพารามิเตอร์ทั่วทั้งแอปพลิเคชัน</p>
+              <h3 className="text-xl font-bold text-white drop-shadow-sm">ตั้งค่าทั่วไป</h3>
+              <p className="text-slate-300 text-sm">ตั้งค่าพารามิเตอร์ทั่วทั้งแอปพลิเคชัน</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ชื่อเว็บไซต์</label>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ชื่อเว็บไซต์</label>
               <input 
                 placeholder="VPNSaaS" 
                 value={siteName}
                 onChange={e => setSiteName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-indigo-500 outline-none transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">โลโก้เว็บไซต์</label>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">โลโก้เว็บไซต์</label>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
+                <div className="w-16 h-16 bg-black/20 border border-white/10 rounded-xl flex items-center justify-center overflow-hidden backdrop-blur-sm shadow-inner">
                   {logoUrl ? (
                     <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-contain" />
                   ) : (
-                    <Globe className="w-8 h-8 text-slate-700" />
+                    <Globe className="w-8 h-8 text-slate-500 drop-shadow-sm" />
                   )}
                 </div>
                 <label className="flex-1">
-                  <div className="bg-slate-950 border border-slate-800 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition-colors">
+                  <div className="bg-black/20 border border-white/10 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500/50 hover:bg-white/5 transition-all backdrop-blur-sm">
                     {uploadingLogo ? (
-                      <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
                     ) : (
                       <>
-                        <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                        <span className="text-xs text-slate-500">คลิกเพื่ออัปโหลดโลโก้</span>
+                        <Upload className="w-6 h-6 text-slate-400 mb-1 drop-shadow-sm" />
+                        <span className="text-xs text-slate-400">คลิกเพื่ออัปโหลดโลโก้</span>
                       </>
                     )}
                     <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} />
@@ -222,13 +222,13 @@ export function Admin() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ลิงก์เชิญ Discord</label>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ลิงก์เชิญ Discord</label>
               <div className="flex gap-2">
                 <input 
                   placeholder="https://discord.gg/..." 
                   value={discordInvite}
                   onChange={e => setDiscordInvite(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-indigo-500 outline-none transition-colors"
+                  className="flex-1 bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                 />
                 <button 
                   onClick={async () => {
@@ -242,7 +242,7 @@ export function Admin() {
                     }
                   }}
                   disabled={savingGlobal}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white px-6 rounded-xl font-bold flex items-center gap-2 transition-all"
+                  className="bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-slate-500 text-white px-6 rounded-xl font-bold flex items-center gap-2 transition-all border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] backdrop-blur-md"
                 >
                   {savingGlobal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   บันทึก
@@ -252,54 +252,54 @@ export function Admin() {
           </div>
         </section>
 
-        <section className="bg-slate-900 p-8 rounded-3xl border border-slate-800">
+        <section className="glass-panel p-8">
           <div className="flex items-center gap-4 mb-6">
-            <div className="bg-emerald-500/10 p-3 rounded-2xl">
-              <CreditCard className="w-6 h-6 text-emerald-500" />
+            <div className="bg-emerald-500/20 p-3 rounded-2xl border border-emerald-500/30 shadow-[0_0_10px_rgba(52,211,153,0.2)]">
+              <CreditCard className="w-6 h-6 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">ตั้งค่าการชำระเงิน</h3>
-              <p className="text-slate-400 text-sm">ตั้งค่าช่องทางการรับเงิน</p>
+              <h3 className="text-xl font-bold text-white drop-shadow-sm">ตั้งค่าการชำระเงิน</h3>
+              <p className="text-slate-300 text-sm">ตั้งค่าช่องทางการรับเงิน</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">เบอร์ TrueMoney</label>
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เบอร์ TrueMoney</label>
                 <input 
                   value={trueMoneyNumber}
                   onChange={e => setTrueMoneyNumber(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ชื่อเจ้าของบัญชี</label>
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ชื่อเจ้าของบัญชี</label>
                 <input 
                   value={bankHolder}
                   onChange={e => setBankHolder(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">URL รูปภาพ QR Code (PromptPay)</label>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">URL รูปภาพ QR Code (PromptPay)</label>
               <input 
                 value={paymentQrUrl}
                 onChange={e => setPaymentQrUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">เติมเงินขั้นต่ำ (บาท)</label>
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
                 <input 
                   type="number"
                   value={minTopup}
                   onChange={e => setMinTopup(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                 />
               </div>
               <div className="flex items-end">
@@ -320,7 +320,7 @@ export function Admin() {
                     }
                   }}
                   disabled={savingPayment}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                  className="w-full bg-emerald-600/80 hover:bg-emerald-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-md"
                 >
                   {savingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   บันทึกการรับเงิน
@@ -328,8 +328,8 @@ export function Admin() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-800 space-y-3">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest block">เปิด/ปิด ช่องทางชำระเงิน</label>
+            <div className="pt-4 border-t border-white/10 space-y-3">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest block drop-shadow-sm">เปิด/ปิด ช่องทางชำระเงิน</label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
@@ -340,7 +340,7 @@ export function Admin() {
                       setPaymentMethods(prev => ({ ...prev, truemoney: newValue }));
                       await setDoc(doc(db, 'settings', 'payment_methods'), { truemoney: newValue }, { merge: true });
                     }}
-                    className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500"
+                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-emerald-500 focus:ring-emerald-500/50 backdrop-blur-sm"
                   />
                   <span className="text-sm text-slate-300">TrueMoney (อั่งเปา)</span>
                 </label>
@@ -353,7 +353,7 @@ export function Admin() {
                       setPaymentMethods(prev => ({ ...prev, promptpay: newValue }));
                       await setDoc(doc(db, 'settings', 'payment_methods'), { promptpay: newValue }, { merge: true });
                     }}
-                    className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500"
+                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-emerald-500 focus:ring-emerald-500/50 backdrop-blur-sm"
                   />
                   <span className="text-sm text-slate-300">PromptPay (สลิป)</span>
                 </label>
@@ -364,16 +364,16 @@ export function Admin() {
       </div>
 
       {/* Recent Activity Mini-Table */}
-      <section className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-white">กิจกรรมล่าสุด</h3>
-          <Link to="/admin/transactions" className="text-blue-400 text-xs font-bold hover:underline">ดูทั้งหมด</Link>
+      <section className="glass-panel overflow-hidden">
+        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+          <h3 className="text-lg font-bold text-white drop-shadow-sm">กิจกรรมล่าสุด</h3>
+          <Link to="/admin/transactions" className="text-blue-400 text-xs font-bold hover:underline drop-shadow-sm">ดูทั้งหมด</Link>
         </div>
         
         {/* Desktop Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-950 text-slate-500 uppercase text-[10px] font-black tracking-widest">
+            <thead className="bg-black/40 text-slate-400 uppercase text-[10px] font-black tracking-widest backdrop-blur-md">
               <tr>
                 <th className="px-6 py-4">ผู้ใช้</th>
                 <th className="px-6 py-4">ประเภท</th>
@@ -381,23 +381,23 @@ export function Admin() {
                 <th className="px-6 py-4">วันที่</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-white/5">
               {recentTransactions.map(tx => {
                 const amount = typeof tx.amount === 'object' ? tx.amount.amount : tx.amount;
                 return (
-                <tr key={tx.id} className="hover:bg-slate-800/50 transition-colors">
+                <tr key={tx.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 text-slate-300 font-medium truncate max-w-[150px]">
                     {tx.userEmail || userMap[tx.userId] || tx.userId}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${tx.type === 'topup' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${tx.type === 'topup' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
                       {tx.type}
                     </span>
                   </td>
-                  <td className={`px-6 py-4 font-bold ${amount > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  <td className={`px-6 py-4 font-bold drop-shadow-sm ${amount > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
                     {amount > 0 ? `+${amount}` : amount} ฿
                   </td>
-                  <td className="px-6 py-4 text-slate-500 text-xs">
+                  <td className="px-6 py-4 text-slate-400 text-xs">
                     {new Date(tx.timestamp).toLocaleDateString()}
                   </td>
                 </tr>
@@ -407,22 +407,22 @@ export function Admin() {
         </div>
 
         {/* Mobile List */}
-        <div className="md:hidden divide-y divide-slate-800">
+        <div className="md:hidden divide-y divide-white/5">
           {recentTransactions.map(tx => {
             const amount = typeof tx.amount === 'object' ? tx.amount.amount : tx.amount;
             return (
-              <div key={tx.id} className="p-4 space-y-3">
+              <div key={tx.id} className="p-4 space-y-3 hover:bg-white/5 transition-colors">
                 <div className="flex justify-between items-start">
                   <p className="text-sm text-slate-300 font-medium truncate max-w-[200px]">
                     {tx.userEmail || userMap[tx.userId] || tx.userId}
                   </p>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${tx.type === 'topup' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${tx.type === 'topup' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
                     {tx.type}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <p className="text-xs text-slate-500">{new Date(tx.timestamp).toLocaleString()}</p>
-                  <p className={`font-bold ${amount > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  <p className="text-xs text-slate-400">{new Date(tx.timestamp).toLocaleString()}</p>
+                  <p className={`font-bold drop-shadow-sm ${amount > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
                     {amount > 0 ? `+${amount}` : amount} ฿
                   </p>
                 </div>

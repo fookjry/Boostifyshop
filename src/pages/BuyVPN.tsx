@@ -227,16 +227,16 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8">
       <header className="text-center">
-        <h1 className="text-4xl font-bold text-white mb-2">ซื้อ VPN</h1>
-        <p className="text-slate-400">เลือกเซิร์ฟเวอร์และเครือข่ายที่คุณต้องการ</p>
+        <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-md">ซื้อ VPN</h1>
+        <p className="text-slate-300">เลือกเซิร์ฟเวอร์และเครือข่ายที่คุณต้องการ</p>
       </header>
 
       <div className="grid lg:grid-cols-3 gap-8 items-start">
         <div className="lg:col-span-2 space-y-8">
           {/* Server Selection */}
           <section className="space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Server className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 drop-shadow-sm">
+              <Server className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               1. เลือกเซิร์ฟเวอร์
             </h3>
             <div className="grid sm:grid-cols-2 gap-4">
@@ -244,23 +244,23 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 <button 
                   key={s.id}
                   onClick={() => setSelectedServer(s)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${selectedServer?.id === s.id ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                  className={`p-4 rounded-2xl border text-left transition-all backdrop-blur-md ${selectedServer?.id === s.id ? 'bg-blue-600/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 hover:bg-white/5 hover:border-white/20'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold text-white">{s.name}</p>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">
+                      <p className="font-bold text-white drop-shadow-sm">{s.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
                         ผู้ใช้งาน: {allVpns.filter(v => v.serverId === s.id && new Date(v.expireAt) > new Date()).length} / {s.maxUsers || '∞'}
                       </p>
                     </div>
-                    <div className={`w-2 h-2 rounded-full ${s.status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${s.status === 'online' ? 'bg-emerald-400 text-emerald-400' : 'bg-red-400 text-red-400'}`} />
                   </div>
                   {s.description && (
-                    <p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p>
+                    <p className="text-[10px] text-slate-400 line-clamp-1">{s.description}</p>
                   )}
                 </button>
               )) : (
-                <div className="col-span-full p-8 bg-slate-900 rounded-2xl border border-slate-800 text-center text-slate-500 italic">
+                <div className="col-span-full p-8 glass-panel text-center text-slate-400 italic">
                   ไม่มีเซิร์ฟเวอร์ที่พร้อมใช้งาน กรุณาติดต่อแอดมิน
                 </div>
               )}
@@ -269,8 +269,8 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
           {/* Network Selection */}
           <section className="space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Wifi className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 drop-shadow-sm">
+              <Wifi className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               2. เลือกเครือข่าย
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -279,53 +279,53 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 const color = n.color || 'emerald';
                 
                 const colorClasses: Record<string, string> = {
-                  emerald: isActive ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-emerald-500/50',
-                  red: isActive ? 'bg-red-500/10 border-red-500 text-red-500 shadow-lg shadow-red-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-red-500/50',
-                  blue: isActive ? 'bg-blue-500/10 border-blue-500 text-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-blue-500/50',
-                  orange: isActive ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-lg shadow-orange-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-orange-500/50',
-                  purple: isActive ? 'bg-purple-500/10 border-purple-500 text-purple-500 shadow-lg shadow-purple-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-purple-500/50',
-                  pink: isActive ? 'bg-pink-500/10 border-pink-500 text-pink-500 shadow-lg shadow-pink-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-pink-500/50',
-                  indigo: isActive ? 'bg-indigo-500/10 border-indigo-500 text-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-indigo-500/50',
-                  amber: isActive ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-lg shadow-amber-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-amber-500/50',
+                  emerald: isActive ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-emerald-500/50 hover:bg-white/5',
+                  red: isActive ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-red-500/50 hover:bg-white/5',
+                  blue: isActive ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-blue-500/50 hover:bg-white/5',
+                  orange: isActive ? 'bg-orange-500/20 border-orange-500/50 text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-orange-500/50 hover:bg-white/5',
+                  purple: isActive ? 'bg-purple-500/20 border-purple-500/50 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-purple-500/50 hover:bg-white/5',
+                  pink: isActive ? 'bg-pink-500/20 border-pink-500/50 text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-pink-500/50 hover:bg-white/5',
+                  indigo: isActive ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-indigo-500/50 hover:bg-white/5',
+                  amber: isActive ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-amber-500/50 hover:bg-white/5',
                 };
 
                 return (
                   <button 
                     key={n.id}
                     onClick={() => setSelectedNetwork(n)}
-                    className={`p-6 rounded-2xl border font-bold text-xl transition-all ${colorClasses[color] || colorClasses.emerald}`}
+                    className={`p-6 rounded-2xl border font-bold text-xl transition-all backdrop-blur-md ${colorClasses[color] || colorClasses.emerald}`}
                   >
                     {n.name}
                   </button>
                 );
               })}
               {networks.length === 0 && (
-                <div className="col-span-full p-8 bg-slate-900 rounded-2xl border border-slate-800 text-center text-slate-500 italic">
+                <div className="col-span-full p-8 glass-panel text-center text-slate-400 italic">
                   ไม่มีเครือข่ายที่พร้อมใช้งาน
                 </div>
               )}
             </div>
 
             {/* Free Trial Section */}
-            <div className="mt-6 p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-blue-500/10 transition-colors" />
+            <div className="mt-6 p-6 rounded-3xl glass-panel relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-blue-500/20 transition-colors" />
               <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center">
-                    <Gift className="w-6 h-6 text-amber-500" />
+                  <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center border border-amber-500/30 shadow-[0_0_15px_rgba(251,191,36,0.2)]">
+                    <Gift className="w-6 h-6 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
                   </div>
                   <div>
-                    <h4 className="text-white font-bold">ทดลองใช้งานฟรี 1 ชั่วโมง</h4>
-                    <p className="text-slate-500 text-xs">เลือกเซิร์ฟเวอร์และเครือข่ายที่ต้องการแล้วเริ่มทดลองได้ทันที</p>
+                    <h4 className="text-white font-bold drop-shadow-sm">ทดลองใช้งานฟรี 1 ชั่วโมง</h4>
+                    <p className="text-slate-300 text-xs">เลือกเซิร์ฟเวอร์และเครือข่ายที่ต้องการแล้วเริ่มทดลองได้ทันที</p>
                   </div>
                 </div>
                 
                 {hasUsedTrial() ? (
-                  <div className="text-amber-500/50 text-sm font-bold bg-amber-500/5 px-4 py-2 rounded-xl border border-amber-500/10">
+                  <div className="text-amber-400/70 text-sm font-bold bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20 backdrop-blur-sm">
                     คุณใช้สิทธิ์ทดลองแล้ว
                   </div>
                 ) : trialSuccess ? (
-                  <div className="flex items-center gap-2 text-emerald-500 font-bold bg-emerald-500/10 px-6 py-3 rounded-2xl border border-emerald-500/20 animate-bounce">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-500/20 px-6 py-3 rounded-2xl border border-emerald-500/30 animate-bounce shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-sm">
                     <Check className="w-5 h-5" />
                     ทดลองใช้งานพร้อมแล้ว!
                   </div>
@@ -333,7 +333,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                   <button 
                     onClick={handleFreeTrial}
                     disabled={trialLoading || !selectedServer || !selectedNetwork}
-                    className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-8 py-3 rounded-2xl font-black transition-all shadow-lg shadow-amber-500/10 active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto bg-amber-500/90 hover:bg-amber-400 disabled:bg-white/5 disabled:text-slate-500 disabled:border-white/10 text-slate-950 px-8 py-3 rounded-2xl font-black transition-all shadow-[0_0_15px_rgba(251,191,36,0.4)] active:scale-95 flex items-center justify-center gap-2 border border-amber-400/50 backdrop-blur-md"
                   >
                     {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'เริ่มทดลองใช้งาน'}
                   </button>
@@ -344,8 +344,8 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
           {/* Duration Selection */}
           <section className="space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Zap className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 drop-shadow-sm">
+              <Zap className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               3. เลือกระยะเวลา
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
@@ -353,12 +353,12 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 <button 
                   key={d}
                   onClick={() => setDuration(d)}
-                  className={`p-4 rounded-2xl border transition-all ${duration === d ? 'bg-blue-600/10 border-blue-500 text-blue-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                  className={`p-4 rounded-2xl border transition-all backdrop-blur-md ${duration === d ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-white/20 hover:bg-white/5'}`}
                 >
-                  <p className="text-2xl font-black">{d}</p>
-                  <p className="text-[10px] uppercase font-bold opacity-60">วัน</p>
+                  <p className="text-2xl font-black drop-shadow-sm">{d}</p>
+                  <p className="text-[10px] uppercase font-bold opacity-80">วัน</p>
                   <div className="mt-2 pt-2 border-t border-white/10">
-                    <p className="text-sm font-bold text-white">
+                    <p className="text-sm font-bold text-white drop-shadow-sm">
                       {selectedServer?.prices?.[d] || 0} ฿
                     </p>
                   </div>
@@ -369,8 +369,8 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
           {/* Device Count Selection */}
           <section className="space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 drop-shadow-sm">
+              <Shield className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               4. จำนวนอุปกรณ์ที่ใช้งานได้
             </h3>
             <div className="grid sm:grid-cols-3 gap-4">
@@ -378,17 +378,17 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 <button 
                   key={opt.count}
                   onClick={() => setDeviceCount(opt.count)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${deviceCount === opt.count ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                  className={`p-4 rounded-2xl border text-left transition-all backdrop-blur-md ${deviceCount === opt.count ? 'bg-blue-600/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 hover:border-white/20 hover:bg-white/5'}`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${deviceCount === opt.count ? 'border-blue-500' : 'border-slate-600'}`}>
-                      {deviceCount === opt.count && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${deviceCount === opt.count ? 'border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'border-slate-500'}`}>
+                      {deviceCount === opt.count && <div className="w-2 h-2 rounded-full bg-blue-400" />}
                     </div>
                     <div>
-                      <p className={`font-bold ${deviceCount === opt.count ? 'text-blue-500' : 'text-white'}`}>
+                      <p className={`font-bold drop-shadow-sm ${deviceCount === opt.count ? 'text-blue-400' : 'text-white'}`}>
                         {opt.count} เครื่อง
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-xs text-slate-300 mt-1">
                         {opt.price === 0 ? 'ฟรี' : `+${opt.price} บาท`}
                       </p>
                     </div>
@@ -401,40 +401,40 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
         {/* Summary Card */}
         <div className="lg:col-span-1">
-          <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 sticky top-24 space-y-6">
-            <h3 className="text-xl font-bold text-white">สรุปการสั่งซื้อ</h3>
+          <div className="glass-panel p-8 sticky top-24 space-y-6">
+            <h3 className="text-xl font-bold text-white drop-shadow-md">สรุปการสั่งซื้อ</h3>
             
             <div className="space-y-4 text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-500">เซิร์ฟเวอร์</span>
-                <span className="text-white font-medium">{selectedServer?.name || '-'}</span>
+                <span className="text-slate-400">เซิร์ฟเวอร์</span>
+                <span className="text-white font-medium drop-shadow-sm">{selectedServer?.name || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">เครือข่าย</span>
-                <span className="text-white font-medium">{selectedNetwork?.name || '-'}</span>
+                <span className="text-slate-400">เครือข่าย</span>
+                <span className="text-white font-medium drop-shadow-sm">{selectedNetwork?.name || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">ระยะเวลา</span>
-                <span className="text-white font-medium">{duration} วัน</span>
+                <span className="text-slate-400">ระยะเวลา</span>
+                <span className="text-white font-medium drop-shadow-sm">{duration} วัน</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">จำนวนอุปกรณ์</span>
-                <span className="text-white font-medium">
+                <span className="text-slate-400">จำนวนอุปกรณ์</span>
+                <span className="text-white font-medium drop-shadow-sm">
                   {deviceCount} เครื่อง {deviceOptions.find(o => o.count === deviceCount)?.price === 0 ? '(ฟรี)' : `(+${deviceOptions.find(o => o.count === deviceCount)?.price} บาท)`}
                 </span>
               </div>
-              <div className="border-t border-slate-800 pt-4 flex justify-between items-end">
-                <span className="text-slate-500">ราคารวม</span>
-                <span className="text-3xl font-black text-white">
+              <div className="border-t border-white/10 pt-4 flex justify-between items-end">
+                <span className="text-slate-400">ราคารวม</span>
+                <span className="text-3xl font-black text-white drop-shadow-md">
                   {(selectedServer?.prices?.[duration] || 0) + (deviceOptions.find(o => o.count === deviceCount)?.price || 0)} ฿
                 </span>
               </div>
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
-                <p className="text-xs text-red-400">{error}</p>
+              <div className="bg-red-500/20 border border-red-500/30 p-4 rounded-xl flex items-start gap-3 backdrop-blur-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                <p className="text-xs text-red-300">{error}</p>
               </div>
             )}
 
@@ -444,11 +444,11 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                   type="checkbox" 
                   checked={acceptedTerms}
                   onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  className="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-900 checked:bg-blue-500 checked:border-blue-500 transition-all"
+                  className="peer appearance-none w-5 h-5 border-2 border-slate-500 rounded bg-black/20 checked:bg-blue-500/80 checked:border-blue-400 transition-all backdrop-blur-sm"
                 />
-                <Check className="w-3 h-3 text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                <Check className="w-3 h-3 text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none drop-shadow-md" />
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+              <p className="text-xs text-slate-300 leading-relaxed group-hover:text-white transition-colors">
                 ฉันยอมรับเงื่อนไขการใช้งาน โดยสามารถใช้ config ได้ตามจำนวนอุปกรณ์ที่เลือกไว้ หากตรวจพบการใช้งานเกินกว่าที่กำหนด ทางระบบมีสิทธิ์ระงับการใช้งาน หรือแบนบัญชีโดยไม่ต้องแจ้งให้ทราบล่วงหน้า
               </p>
             </label>
@@ -456,14 +456,14 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
             <button 
               disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && allVpns.filter(v => v.serverId === selectedServer.id && new Date(v.expireAt) > new Date()).length >= selectedServer.maxUsers)}
               onClick={prePurchaseCheck}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2"
+              className="w-full glass-button py-4 text-lg flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 
                (!selectedServer || !selectedNetwork) ? 'เลือกเซิร์ฟเวอร์และเครือข่าย' :
                (selectedServer?.maxUsers && allVpns.filter(v => v.serverId === selectedServer.id && new Date(v.expireAt) > new Date()).length >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
             </button>
 
-            <p className="text-center text-[10px] text-slate-600 uppercase font-bold tracking-widest">
+            <p className="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest">
               เปิดใช้งานระบบติดตั้งอัตโนมัติ
             </p>
           </div>
@@ -476,55 +476,55 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
             onClick={() => setShowConfirmModal(false)}
           />
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="relative bg-slate-900 p-8 rounded-[40px] border border-slate-800 max-w-md w-full shadow-2xl space-y-6"
+            className="relative glass-panel p-8 max-w-md w-full shadow-2xl space-y-6"
           >
             <div className="text-center space-y-2">
-              <div className="w-16 h-16 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8" />
+              <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                <Shield className="w-8 h-8 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               </div>
-              <h3 className="text-2xl font-bold text-white">ยืนยันการสั่งซื้อ</h3>
-              <p className="text-slate-400">กรุณาตรวจสอบรายละเอียดก่อนยืนยัน</p>
+              <h3 className="text-2xl font-bold text-white drop-shadow-md">ยืนยันการสั่งซื้อ</h3>
+              <p className="text-slate-300">กรุณาตรวจสอบรายละเอียดก่อนยืนยัน</p>
             </div>
 
-            <div className="bg-slate-950/50 rounded-2xl p-4 space-y-3 border border-slate-800">
+            <div className="bg-black/20 rounded-2xl p-4 space-y-3 border border-white/10 backdrop-blur-sm">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">เซิร์ฟเวอร์:</span>
-                <span className="text-white font-bold">{selectedServer?.name}</span>
+                <span className="text-slate-400">เซิร์ฟเวอร์:</span>
+                <span className="text-white font-bold drop-shadow-sm">{selectedServer?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">เครือข่าย:</span>
-                <span className="text-white font-bold">{selectedNetwork?.name}</span>
+                <span className="text-slate-400">เครือข่าย:</span>
+                <span className="text-white font-bold drop-shadow-sm">{selectedNetwork?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">ระยะเวลา:</span>
-                <span className="text-white font-bold">{duration} วัน</span>
+                <span className="text-slate-400">ระยะเวลา:</span>
+                <span className="text-white font-bold drop-shadow-sm">{duration} วัน</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">จำนวนอุปกรณ์:</span>
-                <span className="text-white font-bold">{deviceCount} เครื่อง</span>
+                <span className="text-slate-400">จำนวนอุปกรณ์:</span>
+                <span className="text-white font-bold drop-shadow-sm">{deviceCount} เครื่อง</span>
               </div>
-              <div className="pt-3 border-t border-slate-800 flex justify-between items-end">
-                <span className="text-slate-500">ยอดชำระ:</span>
-                <span className="text-xl font-black text-blue-500">{(selectedServer?.prices?.[duration] || 0) + (deviceOptions.find(o => o.count === deviceCount)?.price || 0)} ฿</span>
+              <div className="pt-3 border-t border-white/10 flex justify-between items-end">
+                <span className="text-slate-400">ยอดชำระ:</span>
+                <span className="text-xl font-black text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]">{(selectedServer?.prices?.[duration] || 0) + (deviceOptions.find(o => o.count === deviceCount)?.price || 0)} ฿</span>
               </div>
             </div>
 
             <div className="flex gap-4">
               <button 
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-bold transition-colors"
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white py-4 rounded-2xl font-bold transition-all border border-white/10 backdrop-blur-sm"
               >
                 ยกเลิก
               </button>
               <button 
                 onClick={handlePurchase}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold transition-colors"
+                className="flex-1 glass-button py-4"
               >
                 ยืนยันการซื้อ
               </button>

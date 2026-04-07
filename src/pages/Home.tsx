@@ -15,10 +15,10 @@ export function Home({ settings }: { settings: any }) {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-white">
-            บริการจำหน่าย Config VPN <span className="text-blue-500">อัตโนมัติ</span>
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-white drop-shadow-lg">
+            บริการจำหน่าย Config VPN <span className="text-gradient">อัตโนมัติ</span>
           </h1>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-xl text-slate-300 max-w-2xl mx-auto drop-shadow-md">
             {siteName} - รวดเร็ว ทำรายการได้ 24ชม.รองรับเครือข่าย AIS และ TRUE
           </p>
         </motion.div>
@@ -29,10 +29,10 @@ export function Home({ settings }: { settings: any }) {
           transition={{ delay: 0.2 }}
           className="flex flex-wrap justify-center gap-4"
         >
-          <Link to="/login" className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-blue-500/20">
+          <Link to="/login" className="glass-button px-8 py-4 text-lg">
             เริ่มต้นใช้งานตอนนี้
           </Link>
-          <Link to="/dashboard" className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all border border-slate-700">
+          <Link to="/dashboard" className="glass-panel hover:bg-white/10 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all">
             ดูการ CONFIG ของฉัน
           </Link>
         </motion.div>
@@ -51,20 +51,20 @@ export function Home({ settings }: { settings: any }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1 }}
-            className="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-blue-500/50 transition-colors group"
+            className="glass-card p-8 group"
           >
-            <f.icon className="w-12 h-12 text-blue-500 mb-6 group-hover:scale-110 transition-transform" />
+            <f.icon className="w-12 h-12 text-blue-400 mb-6 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
             <h3 className="text-xl font-bold text-white mb-2">{f.title}</h3>
-            <p className="text-slate-400">{f.desc}</p>
+            <p className="text-slate-300">{f.desc}</p>
           </motion.div>
         ))}
       </section>
 
       {/* Pricing Preview */}
-      <section className="bg-slate-900 rounded-3xl p-12 border border-slate-800">
+      <section className="glass-panel rounded-3xl p-12">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-white">เลือกแผนที่เหมาะกับความต้องการของ</h2>
-          <p className="text-slate-400">มีให้ทดสอบก่อนใช้งานจริง!!</p>
+          <h2 className="text-3xl font-bold text-white drop-shadow-md">เลือกแผนที่เหมาะกับความต้องการของ</h2>
+          <p className="text-slate-300">มีให้ทดสอบก่อนใช้งานจริง!!</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8">
           {[
@@ -72,15 +72,15 @@ export function Home({ settings }: { settings: any }) {
             { name: "รายสัปดาห์", price: "7 ฿", days: 7 },
             { name: "รายเดือน", price: "30 ฿", days: 30 }
           ].map((p, i) => (
-            <div key={i} className="bg-slate-950 p-8 rounded-2xl border border-slate-800 flex flex-col items-center">
-              <span className="text-blue-500 font-bold uppercase tracking-wider text-sm mb-2">{p.name}</span>
-              <div className="text-4xl font-black text-white mb-6">{p.price}</div>
-              <ul className="space-y-3 mb-8 w-full text-slate-400">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> ความเร็วสูง</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> ใช้งานได้ {p.days} วัน</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> รองรับ AIS/TRUE</li>
+            <div key={i} className="glass-card p-8 flex flex-col items-center">
+              <span className="text-blue-400 font-bold uppercase tracking-wider text-sm mb-2 drop-shadow-[0_0_4px_rgba(59,130,246,0.5)]">{p.name}</span>
+              <div className="text-4xl font-black text-white mb-6 drop-shadow-md">{p.price}</div>
+              <ul className="space-y-3 mb-8 w-full text-slate-300">
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]" /> ความเร็วสูง</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]" /> ใช้งานได้ {p.days} วัน</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]" /> รองรับ AIS/TRUE</li>
               </ul>
-              <Link to="/buy" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold text-center transition-colors">
+              <Link to="/buy" className="w-full glass-button py-3 text-center">
                 ซื้อเลย
               </Link>
             </div>
