@@ -12,6 +12,7 @@ export function Admin() {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [discordInvite, setDiscordInvite] = useState('');
   const [siteName, setSiteName] = useState('VPNSaaS');
+  const [announcement, setAnnouncement] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [trueMoneyNumber, setTrueMoneyNumber] = useState('');
   const [paymentQrUrl, setPaymentQrUrl] = useState('');
@@ -54,6 +55,7 @@ export function Admin() {
         const data = doc.data();
         setDiscordInvite(data.discordInvite || '');
         setSiteName(data.siteName || 'VPNSaaS');
+        setAnnouncement(data.announcement || '');
         setLogoUrl(data.logoUrl || '');
       }
     });
@@ -222,6 +224,17 @@ export function Admin() {
             </div>
 
             <div className="space-y-1">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ข้อความประกาศ (ตัวอักษรวิ่ง)</label>
+              <textarea 
+                placeholder="ยินดีต้อนรับสู่ VPNSaaS..." 
+                value={announcement}
+                onChange={e => setAnnouncement(e.target.value)}
+                rows={2}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
               <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ลิงก์เชิญ Discord</label>
               <div className="flex gap-2">
                 <input 
@@ -234,7 +247,7 @@ export function Admin() {
                   onClick={async () => {
                     setSavingGlobal(true);
                     try {
-                      await setDoc(doc(db, 'settings', 'global'), { discordInvite, siteName }, { merge: true });
+                      await setDoc(doc(db, 'settings', 'global'), { discordInvite, siteName, announcement }, { merge: true });
                     } catch (error) {
                       handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
                     } finally {

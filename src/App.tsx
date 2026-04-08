@@ -4,6 +4,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Navbar } from './components/Navbar';
+import { AnnouncementBar } from './components/AnnouncementBar';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -122,9 +123,10 @@ export default function App() {
             <div className="blob blob-2"></div>
           </div>
 
-          <div className="relative z-10">
+          <div className="relative z-10 flex flex-col min-h-screen">
+            <AnnouncementBar />
             <Navbar user={user} profile={profile} settings={settings} />
-            <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+            <main className="container mx-auto px-4 py-8 pb-24 md:pb-8 flex-1">
               <Routes>
                 <Route path="/" element={<Home settings={settings} />} />
                 <Route path="/login" element={!user ? <Login settings={settings} /> : <Navigate to="/dashboard" />} />
