@@ -63,7 +63,7 @@ export function Home({ settings }: { settings: any }) {
       {/* Pricing Preview */}
       <section className="glass-panel rounded-3xl p-12">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-white drop-shadow-md">เลือกแผนที่เหมาะกับความต้องการของ</h2>
+          <h2 className="text-3xl font-bold text-white drop-shadow-md">เลือกแผนที่เหมาะกับความต้องการของคุณ</h2>
           <p className="text-slate-300">มีให้ทดสอบก่อนใช้งานจริง!!</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8">
