@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Server, Users, CreditCard, Activity, ShieldAlert, ChevronRight, TrendingUp, DollarSign, MessageSquare, Save, Loader2, Wifi, Upload, Globe } from 'lucide-react';
+import { Server, Users, CreditCard, Activity, ShieldAlert, ChevronRight, TrendingUp, DollarSign, MessageSquare, Save, Loader2, Wifi, Upload, Globe, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
@@ -123,6 +123,7 @@ export function Admin() {
   const menuItems = [
     { to: '/admin/users', label: 'จัดการผู้ใช้', desc: 'จัดการยอดเงินและ VPN ของผู้ใช้', icon: Users, color: 'blue' },
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', desc: 'ตั้งค่าเซิร์ฟเวอร์และราคา', icon: Server, color: 'amber' },
+    { to: '/admin/icons', label: 'จัดการรูปภาพแอพ', desc: 'อัปโหลดไอคอนแอพ (1-10)', icon: ImageIcon, color: 'blue' },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', desc: 'ตั้งค่าเครือข่ายและ Inbound ID', icon: Wifi, color: 'indigo' },
     { to: '/admin/devices', label: 'จัดการจำนวนอุปกรณ์', desc: 'ตั้งค่าตัวเลือกจำนวนอุปกรณ์และราคา', icon: Server, color: 'pink' },
     { to: '/admin/transactions', label: 'ธุรกรรมและวิเคราะห์', desc: 'ดูบันทึกและกราฟรายได้', icon: CreditCard, color: 'emerald' },

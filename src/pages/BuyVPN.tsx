@@ -256,8 +256,38 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${s.status === 'online' ? 'bg-emerald-400 text-emerald-400' : 'bg-red-400 text-red-400'}`} />
                   </div>
                   {s.description && (
-                    <p className="text-[10px] text-slate-400 line-clamp-1">{s.description}</p>
+                    <p className="text-[10px] text-slate-400 line-clamp-1 mb-3">{s.description}</p>
                   )}
+
+                  <div className="flex flex-col gap-3">
+                    {/* Supported Apps */}
+                    {s.supportedAppIcons && s.supportedAppIcons.filter(Boolean).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">Supported Apps</p>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                          {s.supportedAppIcons.filter(Boolean).map((icon: string, idx: number) => (
+                            <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
+                              <img src={icon} alt="App" className="w-full h-full object-contain" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* General Usage */}
+                    {s.generalUsageIcons && s.generalUsageIcons.filter(Boolean).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">General Usage</p>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                          {s.generalUsageIcons.filter(Boolean).map((icon: string, idx: number) => (
+                            <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
+                              <img src={icon} alt="Usage" className="w-full h-full object-contain" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </button>
               )) : (
                 <div className="col-span-full p-8 glass-panel text-center text-slate-400 italic">

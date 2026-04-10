@@ -16,6 +16,7 @@ import { UserManagement } from './pages/admin/UserManagement';
 import { ServerManagement } from './pages/admin/ServerManagement';
 import { Transactions } from './pages/admin/Transactions';
 import { NetworkManagement } from './pages/admin/NetworkManagement';
+import { AppIconManager } from './pages/admin/AppIconManager';
 import { AdminDeviceOptions } from './pages/AdminDeviceOptions';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -140,6 +141,7 @@ export default function App() {
                 <Route path="/admin/users" element={profile?.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
                 <Route path="/admin/servers" element={profile?.role === 'admin' ? <ServerManagement /> : <Navigate to="/" />} />
                 <Route path="/admin/networks" element={profile?.role === 'admin' ? <NetworkManagement /> : <Navigate to="/" />} />
+                <Route path="/admin/icons" element={profile?.role === 'admin' ? <AppIconManager /> : <Navigate to="/" />} />
                 <Route path="/admin/devices" element={profile?.role === 'admin' ? <AdminDeviceOptions /> : <Navigate to="/" />} />
                 <Route path="/admin/transactions" element={profile?.role === 'admin' ? <Transactions /> : <Navigate to="/" />} />
               </Routes>

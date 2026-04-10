@@ -1,131 +1,224 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Server, Plus, Trash2, Power, Settings, Edit, Loader2, Save, X } from 'lucide-react';
+import { Server, Plus, Trash2, Power, Settings, Edit, Loader2, Save, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 
-const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => (
-  <form onSubmit={onSubmit} className="flex flex-col max-h-[75dvh]">
-    <div className="space-y-6 overflow-y-auto pr-2 pb-4 custom-scrollbar">
-      <h3 className="text-xl font-bold text-white">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ชื่อเซิร์ฟเวอร์</label>
-        <input 
-          placeholder="Singapore Premium" 
-          value={data.name}
-          onChange={e => setData({...data, name: e.target.value})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Host IP/Domain</label>
-        <input 
-          placeholder="1.2.3.4" 
-          value={data.host}
-          onChange={e => setData({...data, host: e.target.value})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-    </div>
+const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
+  const [uploadingCategory, setUploadingCategory] = useState<{ field: string, index: number } | null>(null);
 
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">พอร์ต (Port)</label>
-        <input 
-          type="number" 
-          value={data.port ?? ''}
-          onChange={e => setData({...data, port: e.target.value === '' ? '' : parseInt(e.target.value)})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ผู้ใช้สูงสุด</label>
-        <input 
-          type="number" 
-          value={data.maxUsers ?? ''}
-          onChange={e => setData({...data, maxUsers: e.target.value === '' ? '' : parseInt(e.target.value)})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ผู้ใช้ 3x-ui</label>
-        <input 
-          value={data.username}
-          onChange={e => setData({...data, username: e.target.value})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">รหัสผ่าน 3x-ui</label>
-        <input 
-          type="password" 
-          value={data.password}
-          onChange={e => setData({...data, password: e.target.value})}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
-          required
-        />
-      </div>
-    </div>
+  const handleIconUpload = (field: string, index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    <div className="space-y-1">
-      <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">คำอธิบาย (สูงสุด 100 คำ)</label>
-      <textarea 
-        placeholder="คำอธิบายสั้นๆ เกี่ยวกับเซิร์ฟเวอร์..." 
-        value={data.description || ''}
-        onChange={e => setData({...data, description: e.target.value})}
-        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white h-24 resize-none"
-        maxLength={500}
-      />
-    </div>
+    if (file.size > 512 * 1024) {
+      alert('ไฟล์มีขนาดใหญ่เกินไป (จำกัด 512KB ต่อรูป เพื่อประสิทธิภาพ)');
+      return;
+    }
 
-    <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ราคา (บาท)</label>
-        <span className="text-[10px] text-slate-600 font-bold italic">* ใส่ 0 เพื่อปิดการขาย</span>
+    setUploadingCategory({ field, index });
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      const currentIcons = [...(data[field] || [])];
+      currentIcons[index] = base64String;
+      setData({ ...data, [field]: currentIcons });
+      setUploadingCategory(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeIcon = (field: string, index: number) => {
+    const currentIcons = [...(data[field] || [])];
+    currentIcons[index] = null;
+    setData({ ...data, [field]: currentIcons });
+  };
+
+  const IconSlot = ({ field, index, label }: { field: string, index: number, label: string }) => {
+    const icon = data[field]?.[index];
+    const isUploading = uploadingCategory?.field === field && uploadingCategory?.index === index;
+
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <div className="relative group/icon w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center overflow-hidden transition-all hover:border-slate-700">
+          {icon ? (
+            <>
+              <img src={icon} alt={label} className="w-full h-full object-contain p-2" />
+              <button
+                type="button"
+                onClick={() => removeIcon(field, index)}
+                className="absolute top-1 right-1 bg-red-500 p-1 rounded-md opacity-0 group-hover/icon:opacity-100 transition-opacity"
+              >
+                <Trash2 className="w-3 h-3 text-white" />
+              </button>
+            </>
+          ) : (
+            <label className="cursor-pointer flex flex-col items-center gap-1 text-slate-600 hover:text-blue-400 transition-colors">
+              <Upload className="w-5 h-5" />
+              <span className="text-[8px] font-bold uppercase">Upload</span>
+              <input 
+                type="file" 
+                className="hidden" 
+                accept="image/*" 
+                onChange={(e) => handleIconUpload(field, index, e)}
+              />
+            </label>
+          )}
+
+          {isUploading && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+            </div>
+          )}
+        </div>
+        <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
       </div>
-      <div className="grid grid-cols-5 gap-2">
-        {[1, 3, 7, 15, 30].map(days => (
-          <div key={days} className="space-y-1">
-            <label className="text-[10px] text-slate-500 block text-center">{days} วัน</label>
+    );
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col max-h-[75dvh]">
+      <div className="space-y-6 overflow-y-auto pr-2 pb-4 custom-scrollbar">
+        <h3 className="text-xl font-bold text-white">{title}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ชื่อเซิร์ฟเวอร์</label>
             <input 
-              type="number" 
-              value={data.prices?.[days] ?? ''}
-              onChange={e => setData({
-                ...data, 
-                prices: { ...(data.prices || {}), [days]: e.target.value === '' ? 0 : parseInt(e.target.value) }
-              })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white text-center"
+              placeholder="Singapore Premium" 
+              value={data.name}
+              onChange={e => setData({...data, name: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
             />
           </div>
-        ))}
-      </div>
-    </div>
-    </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Host IP/Domain</label>
+            <input 
+              placeholder="1.2.3.4" 
+              value={data.host}
+              onChange={e => setData({...data, host: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
+            />
+          </div>
+        </div>
 
-    <div className="flex gap-4 pt-4 border-t border-slate-800 shrink-0 mt-2">
-      <button 
-        type="button"
-        onClick={onCancel}
-        className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
-      >
-        ยกเลิก
-      </button>
-      <button 
-        type="submit"
-        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-      >
-        <Save className="w-4 h-4" /> บันทึกเซิร์ฟเวอร์
-      </button>
-    </div>
-  </form>
-);
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">พอร์ต (Port)</label>
+            <input 
+              type="number" 
+              value={data.port ?? ''}
+              onChange={e => setData({...data, port: e.target.value === '' ? '' : parseInt(e.target.value)})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ผู้ใช้สูงสุด</label>
+            <input 
+              type="number" 
+              value={data.maxUsers ?? ''}
+              onChange={e => setData({...data, maxUsers: e.target.value === '' ? '' : parseInt(e.target.value)})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ผู้ใช้ 3x-ui</label>
+            <input 
+              value={data.username}
+              onChange={e => setData({...data, username: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">รหัสผ่าน 3x-ui</label>
+            <input 
+              type="password" 
+              value={data.password}
+              onChange={e => setData({...data, password: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-blue-500 outline-none"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">คำอธิบาย (สูงสุด 100 คำ)</label>
+          <textarea 
+            placeholder="คำอธิบายสั้นๆ เกี่ยวกับเซิร์ฟเวอร์..." 
+            value={data.description || ''}
+            onChange={e => setData({...data, description: e.target.value})}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white h-24 resize-none"
+            maxLength={500}
+          />
+        </div>
+
+        {/* Supported Apps Selection */}
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">แอพที่รองรับ (สูงสุด 2 แอพ)</label>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
+            <IconSlot field="supportedAppIcons" index={0} label="App 1" />
+            <IconSlot field="supportedAppIcons" index={1} label="App 2" />
+          </div>
+        </div>
+
+        {/* General Usage Selection */}
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">การใช้งานทั่วไป (สูงสุด 4 แอพ)</label>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
+            <IconSlot field="generalUsageIcons" index={0} label="Usage 1" />
+            <IconSlot field="generalUsageIcons" index={1} label="Usage 2" />
+            <IconSlot field="generalUsageIcons" index={2} label="Usage 3" />
+            <IconSlot field="generalUsageIcons" index={3} label="Usage 4" />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex justify-between items-end">
+            <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ราคา (บาท)</label>
+            <span className="text-[10px] text-slate-600 font-bold italic">* ใส่ 0 เพื่อปิดการขาย</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 3, 7, 15, 30].map(days => (
+              <div key={days} className="space-y-1">
+                <label className="text-[10px] text-slate-500 block text-center">{days} วัน</label>
+                <input 
+                  type="number" 
+                  value={data.prices?.[days] ?? ''}
+                  onChange={e => setData({
+                    ...data, 
+                    prices: { ...(data.prices || {}), [days]: e.target.value === '' ? 0 : parseInt(e.target.value) }
+                  })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white text-center"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-4 pt-4 border-t border-slate-800 shrink-0 mt-2">
+        <button 
+          type="button"
+          onClick={onCancel}
+          className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
+        >
+          ยกเลิก
+        </button>
+        <button 
+          type="submit"
+          className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+        >
+          <Save className="w-4 h-4" /> บันทึกเซิร์ฟเวอร์
+        </button>
+      </div>
+    </form>
+  );
+};
 
 export function ServerManagement() {
   const [servers, setServers] = useState<any[]>([]);
@@ -143,6 +236,8 @@ export function ServerManagement() {
     username: '',
     password: '',
     description: '',
+    supportedAppIcons: [],
+    generalUsageIcons: [],
     prices: {
       1: 5,
       3: 15,
