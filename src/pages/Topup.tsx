@@ -31,7 +31,7 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     }
   }, [giftLink, method]);
   const [paymentSettings, setPaymentSettings] = useState({ trueMoneyNumber: '', paymentQrUrl: '' });
-  const [paymentMethods, setPaymentMethods] = useState({ promptpay: true, truemoney: true });
+  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open' });
   const [copied, setCopied] = useState(false);
 
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -50,8 +50,8 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
       if (doc.exists()) {
         const data = doc.data();
         setPaymentMethods({
-          promptpay: data.promptpay ?? true,
-          truemoney: data.truemoney ?? true
+          promptpay: data.promptpay || 'open',
+          truemoney: data.truemoney || 'open'
         });
       }
     });
@@ -83,6 +83,15 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isAdmin = profile?.role === 'admin';
+
+  const isMethodAvailable = (methodKey: 'truemoney' | 'promptpay') => {
+    const mode = paymentMethods[methodKey];
+    if (mode === 'open') return true;
+    if (mode === 'maintenance' && isAdmin) return true;
+    return false;
+  };
+
   const handleTopup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -90,8 +99,8 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     setSuccess(false);
 
     const methodKey = method === 'gift' ? 'truemoney' : 'promptpay';
-    if (!paymentMethods[methodKey as keyof typeof paymentMethods]) {
-      setError('This payment method is currently disabled.');
+    if (!isMethodAvailable(methodKey)) {
+      setError('ขออภัย ช่องทางนี้ปิดปรับปรุงชั่วคราว');
       setLoading(false);
       return;
     }
@@ -119,16 +128,21 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     }
   };
 
-  const allDisabled = !paymentMethods.promptpay && !paymentMethods.truemoney;
+  const allDisabled = !isMethodAvailable('promptpay') && !isMethodAvailable('truemoney');
 
   if (allDisabled) {
+    const isMaintenance = paymentMethods.promptpay === 'maintenance' || paymentMethods.truemoney === 'maintenance';
     return (
       <div className="max-w-2xl mx-auto py-20 text-center space-y-6">
-        <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto">
+        <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${isMaintenance ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
           <AlertCircle className="w-10 h-10" />
         </div>
-        <h1 className="text-3xl font-bold text-white">ระบบเติมเงินปิดปรับปรุงชั่วคราว</h1>
-        <p className="text-slate-400">ขออภัยในความไม่สะดวก ขณะนี้ระบบเติมเงินกำลังอยู่ระหว่างการปรับปรุง</p>
+        <h1 className="text-3xl font-bold text-white">{isMaintenance ? 'ระบบกำลังปิดปรับปรุง' : 'ระบบเติมเงินปิดให้บริการ'}</h1>
+        <p className="text-slate-400">
+          {isMaintenance 
+            ? 'ขออภัยในความไม่สะดวก ขณะนี้ระบบเติมเงินกำลังอยู่ระหว่างการปรับปรุงเพื่อประสิทธิภาพที่ดีขึ้น' 
+            : 'ขออภัย ขณะนี้ระบบเติมเงินยังไม่เปิดให้บริการในขณะนี้'}
+        </p>
       </div>
     );
   }
@@ -144,26 +158,32 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
         <div className="flex p-1 bg-black/20 rounded-2xl border border-white/10 backdrop-blur-sm">
           <button 
             onClick={() => setMethod('gift')}
-            disabled={!paymentMethods.truemoney}
+            disabled={!isMethodAvailable('truemoney')}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all relative group ${method === 'gift' ? 'bg-blue-600/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-blue-500/50 backdrop-blur-md' : 'text-slate-400 hover:text-white hover:bg-white/5'} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Gift className="w-5 h-5" /> อั่งเปา TrueMoney
-            {!paymentMethods.truemoney && (
+            {!isMethodAvailable('truemoney') && (
               <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
-                ไม่สามารถใช้งานได้ในขณะนี้
+                {paymentMethods.truemoney === 'maintenance' ? 'กำลังปรับปรุง (เฉพาะแอดมิน)' : 'ปิดให้บริการ'}
               </div>
+            )}
+            {paymentMethods.truemoney === 'maintenance' && isAdmin && (
+              <div className="absolute -top-2 -right-2 bg-amber-500 text-[8px] px-1.5 py-0.5 rounded-full font-black text-black animate-pulse">MAINTENANCE</div>
             )}
           </button>
           <button 
             onClick={() => setMethod('transfer')}
-            disabled={!paymentMethods.promptpay}
+            disabled={!isMethodAvailable('promptpay')}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all relative group ${method === 'transfer' ? 'bg-blue-600/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-blue-500/50 backdrop-blur-md' : 'text-slate-400 hover:text-white hover:bg-white/5'} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <QrCode className="w-5 h-5" /> โอนเงิน / QR Code
-            {!paymentMethods.promptpay && (
+            {!isMethodAvailable('promptpay') && (
               <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
-                ปิดปรับปรุงชั่วคราว
+                {paymentMethods.promptpay === 'maintenance' ? 'กำลังปรับปรุง (เฉพาะแอดมิน)' : 'ปิดให้บริการ'}
               </div>
+            )}
+            {paymentMethods.promptpay === 'maintenance' && isAdmin && (
+              <div className="absolute -top-2 -right-2 bg-amber-500 text-[8px] px-1.5 py-0.5 rounded-full font-black text-black animate-pulse">MAINTENANCE</div>
             )}
           </button>
         </div>

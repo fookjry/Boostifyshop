@@ -101,7 +101,7 @@ service cloud.firestore {
 
     // Global Settings Rules
     match /settings/{settingId} {
-      allow read: if true;
+      allow read: if settingId != 'payment_keys' || isAdmin();
       allow write: if isAdmin();
     }
   }

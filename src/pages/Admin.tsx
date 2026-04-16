@@ -18,7 +18,9 @@ export function Admin() {
   const [paymentQrUrl, setPaymentQrUrl] = useState('');
   const [bankHolder, setBankHolder] = useState('');
   const [minTopup, setMinTopup] = useState(50);
-  const [paymentMethods, setPaymentMethods] = useState({ promptpay: true, truemoney: true });
+  const [easySlipApiKey, setEasySlipApiKey] = useState('');
+  const [darkxApiKey, setDarkxApiKey] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open' });
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -70,12 +72,20 @@ export function Admin() {
       }
     });
 
+    const unsubKeys = onSnapshot(doc(db, 'settings', 'payment_keys'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setEasySlipApiKey(data.easySlipApiKey || '');
+        setDarkxApiKey(data.darkxApiKey || '');
+      }
+    });
+
     const unsubMethods = onSnapshot(doc(db, 'settings', 'payment_methods'), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         setPaymentMethods({
-          promptpay: data.promptpay ?? true,
-          truemoney: data.truemoney ?? true
+          promptpay: data.promptpay || 'open',
+          truemoney: data.truemoney || 'open'
         });
       }
     });
@@ -112,6 +122,7 @@ export function Admin() {
     return () => {
       unsubGlobal();
       unsubPayment();
+      unsubKeys();
       unsubMethods();
       unsubUsers();
       unsubServers();
@@ -306,6 +317,29 @@ export function Admin() {
               />
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">EasySlip API Key (PromptPay)</label>
+                <input 
+                  type="password"
+                  value={easySlipApiKey}
+                  onChange={e => setEasySlipApiKey(e.target.value)}
+                  placeholder="v1_xxxxxxxxxxxx"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">DarkX API Key (TrueMoney)</label>
+                <input 
+                  type="password"
+                  value={darkxApiKey}
+                  onChange={e => setDarkxApiKey(e.target.value)}
+                  placeholder="API Key จาก DarkX"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
@@ -325,7 +359,12 @@ export function Admin() {
                         trueMoneyNumber, 
                         paymentQrUrl, 
                         bankHolder, 
-                        minTopup 
+                        minTopup
+                      }, { merge: true });
+                      
+                      await setDoc(doc(db, 'settings', 'payment_keys'), {
+                        easySlipApiKey,
+                        darkxApiKey
                       }, { merge: true });
                     } catch (error) {
                       handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
@@ -342,35 +381,55 @@ export function Admin() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-white/10 space-y-3">
-              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest block drop-shadow-sm">เปิด/ปิด ช่องทางชำระเงิน</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={paymentMethods.truemoney}
-                    onChange={async (e) => {
-                      const newValue = e.target.checked;
-                      setPaymentMethods(prev => ({ ...prev, truemoney: newValue }));
-                      await setDoc(doc(db, 'settings', 'payment_methods'), { truemoney: newValue }, { merge: true });
-                    }}
-                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-emerald-500 focus:ring-emerald-500/50 backdrop-blur-sm"
-                  />
-                  <span className="text-sm text-slate-300">TrueMoney (อั่งเปา)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={paymentMethods.promptpay}
-                    onChange={async (e) => {
-                      const newValue = e.target.checked;
-                      setPaymentMethods(prev => ({ ...prev, promptpay: newValue }));
-                      await setDoc(doc(db, 'settings', 'payment_methods'), { promptpay: newValue }, { merge: true });
-                    }}
-                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-emerald-500 focus:ring-emerald-500/50 backdrop-blur-sm"
-                  />
-                  <span className="text-sm text-slate-300">PromptPay (สลิป)</span>
-                </label>
+            <div className="pt-4 border-t border-white/10 space-y-6">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest block drop-shadow-sm">ตั้งค่าสถานะช่องทางชำระเงิน</label>
+              
+              <div className="space-y-4">
+                {/* TrueMoney Settings */}
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-300 font-bold">TrueMoney (อั่งเปา)</p>
+                  <div className="flex gap-2">
+                    {['open', 'closed', 'maintenance'].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={async () => {
+                          setPaymentMethods(prev => ({ ...prev, truemoney: mode }));
+                          await setDoc(doc(db, 'settings', 'payment_methods'), { truemoney: mode }, { merge: true });
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                          paymentMethods.truemoney === mode 
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
+                            : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                        }`}
+                      >
+                        {mode === 'open' ? 'เปิด' : mode === 'closed' ? 'ปิด' : 'ปรับปรุง'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PromptPay Settings */}
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-300 font-bold">PromptPay (สลิป)</p>
+                  <div className="flex gap-2">
+                    {['open', 'closed', 'maintenance'].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={async () => {
+                          setPaymentMethods(prev => ({ ...prev, promptpay: mode }));
+                          await setDoc(doc(db, 'settings', 'payment_methods'), { promptpay: mode }, { merge: true });
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                          paymentMethods.promptpay === mode 
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
+                            : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                        }`}
+                      >
+                        {mode === 'open' ? 'เปิด' : mode === 'closed' ? 'ปิด' : 'ปรับปรุง'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

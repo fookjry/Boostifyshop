@@ -842,17 +842,39 @@ async function startServer() {
       const methods = snap.exists() ? snap.data() : null;
       const methodKey = type === 'gift' ? 'truemoney' : 'promptpay';
       
-      // Default to true if not explicitly disabled
-      const isEnabled = methods ? (methods[methodKey] ?? true) : true;
+      const status = methods ? (methods[methodKey] ?? 'open') : 'open';
       
-      if (!isEnabled) {
+      if (status === 'closed' || status === false) {
         return res.status(403).json({ success: false, error: "ช่องทางการชำระเงินนี้ถูกปิดใช้งานชั่วคราว" });
+      }
+
+      if (status === 'maintenance') {
+        // Check if user is admin
+        const { uid, email } = req.user;
+        const isDefaultAdmin = (email === "jry.fook@gmail.com");
+        const isServerAdmin = (email === "server@local.host");
+        let isAdmin = isDefaultAdmin || isServerAdmin;
+
+        if (!isAdmin) {
+          const userSnap = await db.collection('users').doc(uid).get();
+          if (userSnap.exists() && userSnap.data()?.role === 'admin') {
+            isAdmin = true;
+          }
+        }
+
+        if (!isAdmin) {
+          return res.status(403).json({ success: false, error: "ช่องทางการชำระเงินนี้กำลังปิดปรับปรุง (เฉพาะแอดมิน)" });
+        }
       }
 
       if (type === 'transfer') {
         const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
         const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
-        const apiKey = process.env.EASY_SLIP_API_KEY;
+        
+        const paymentKeysSnap = await db.collection('settings').doc('payment_keys').get();
+        const paymentKeys = paymentKeysSnap.exists() ? paymentKeysSnap.data() : {};
+        
+        const apiKey = paymentKeys?.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
 
         if (!apiKey) {
           return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับตรวจสอบสลิป" });
@@ -998,7 +1020,9 @@ async function startServer() {
         try {
           console.log(`[TrueMoney] Redeeming voucher via DarkX API: ${data} for mobile: ${mobile}`);
           
-          const darkxApiKey = paymentSettings?.darkxApiKey || process.env.DARKX_API_KEY;
+          const paymentKeysSnap = await db.collection('settings').doc('payment_keys').get();
+          const paymentKeys = paymentKeysSnap.exists() ? paymentKeysSnap.data() : {};
+          const darkxApiKey = paymentKeys?.darkxApiKey || process.env.DARKX_API_KEY;
 
           if (!darkxApiKey) {
             return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับรับอั่งเปา (DarkX API)" });
