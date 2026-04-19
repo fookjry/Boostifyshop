@@ -42,7 +42,7 @@ export function Home({ settings }: { settings: any }) {
       <section className="grid md:grid-cols-3 gap-8">
         {[
           { icon: Zap, title: "ส่งมอบทันที", desc: "การตั้งค่า VPN ของคุณจะถูกสร้างขึ้นทันทีหลังจากการซื้อ" },
-          { icon: Globe, title: "มีหลาย Server", desc: "เลือก Server ที่เหมาะกับคุณ" },
+          { icon: Globe, title: "มีหลาย Server", desc: "เลือก Server ได้เอง จำกัด User เพื่อความลื่นไหล ไม่แลคแน่นอน" },
           { icon: Lock, title: "ปลอดภัยและเป็นส่วนตัว", desc: "โปรโตคอล VLESS พร้อมการเข้ารหัส TLS เพื่อความเป็นส่วนตัวสูงสุด" }
         ].map((f, i) => (
           <motion.div 

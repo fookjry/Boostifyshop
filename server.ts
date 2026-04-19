@@ -99,6 +99,7 @@ process.env.FIREBASE_CONFIG = JSON.stringify({
 // Use a named app to avoid conflicts with the default app initialized by the environment
 const adminApp = getAdminApps().find(app => app.name === 'admin-app') || initializeAdminApp({
   projectId: projectId,
+  storageBucket: firebaseAppConfig.storageBucket,
 }, 'admin-app');
 
 console.log(`Admin SDK initialized with project: ${adminApp.options.projectId} (App Name: ${adminApp.name})`);
@@ -236,6 +237,28 @@ function matchReceiverName(slipName: string, configName: string): boolean {
 
   return true;
 }
+
+  // --- Discord Webhook Helper ---
+  async function sendDiscordNotification(content: string) {
+    try {
+      const globalSettingsSnap = await db.collection('settings').doc('global').get();
+      const webhookUrl = globalSettingsSnap.data()?.discordWebhookUrl;
+      
+      if (webhookUrl && webhookUrl.includes('discord') && webhookUrl.includes('api/webhooks/')) {
+        await axios.post(webhookUrl, { 
+          content,
+          username: "Ticket Monitoring",
+          avatar_url: "https://cdn.discordapp.com/embed/avatars/0.png"
+        }).catch(err => {
+          console.error("Failed to send webhook to Discord:", err.message);
+        });
+      } else {
+        if (webhookUrl) console.log("Discord webhook URL is invalid format:", webhookUrl);
+      }
+    } catch (error) {
+      console.error("Discord Notification Error:", error);
+    }
+  }
 
 async function startServer() {
   const app = express();
@@ -744,6 +767,20 @@ async function startServer() {
     }
     
     try {
+      // Check last trial time to prevent abuse internally
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData?.lastTrialAt) {
+          const lastTrialTime = new Date(userData.lastTrialAt).getTime();
+          const now = new Date().getTime();
+          const hoursSinceLastTrial = (now - lastTrialTime) / (1000 * 60 * 60);
+          if (hoursSinceLastTrial < 24) {
+            return res.status(403).json({ success: false, error: "ใช้งานทดลองฟรีไปแล้วใน 24 ชั่วโมงที่ผ่านมา" });
+          }
+        }
+      }
+
       // Fetch server data and private credentials
       const serverRef = db.collection('servers').doc(server.id);
       const serverSnap = await serverRef.get();
@@ -1109,6 +1146,145 @@ async function startServer() {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  // --- TICKETS API ---
+  app.post("/api/tickets/create", authenticate, apiLimiter, async (req: any, res) => {
+    try {
+      const { title, initialMessage } = req.body;
+      const userId = req.user.uid;
+      const userEmail = req.user.email;
+
+      if (!title) return res.status(400).json({ error: "กรุณาระบุหัวข้อปัญหา" });
+
+      // Check for existing open tickets (spam protection)
+      // We query all user's tickets and filter in-memory to avoid composite index requirement for != operator
+      const q = query(
+        collection(dbModular, 'tickets'),
+        where('userId', '==', userId)
+      );
+      const userTicketsSnap = await getDocs(q);
+      const hasOpenTicket = userTicketsSnap.docs.some(doc => doc.data().status !== 'closed');
+      
+      if (hasOpenTicket) {
+        return res.status(400).json({ 
+          error: "คุณมี Ticket ที่ยังเปิดค้างอยู่ 1 รายการ กรุณารอให้แอดมินปิดงานเดิมก่อนจึงจะเปิดใหม่ได้" 
+        });
+      }
+
+      // Create ticket document
+      const docRef = await db.collection('tickets').add({
+        userId,
+        userEmail,
+        title,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      const ticketId = docRef.id;
+
+      // Notify Discord
+      sendDiscordNotification(`🆕 **Ticket ใหม่!**\n**ID:** \`${ticketId}\`\n**หัวข้อ:** ${title}\n**จากผู้ใช้:** ${userEmail} (${userId})`);
+
+      // Add initial message
+      if (initialMessage) {
+        await db.collection('tickets').doc(ticketId).collection('messages').add({
+          senderId: userId,
+          senderRole: 'user',
+          content: initialMessage,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      return res.json({ success: true, ticketId });
+
+    } catch (error: any) {
+      console.error("Create ticket error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  const replyLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 30, // Limit each IP to 30 replies per 5 minutes
+    message: { error: "Too many messages, please wait a moment" },
+  });
+
+  app.post("/api/tickets/:ticketId/reply", authenticate, replyLimiter, async (req: any, res) => {
+    try {
+      const { ticketId } = req.params;
+      const { content, role } = req.body;
+      const userId = req.user.uid;
+      
+      const ticketSnap = await db.collection('tickets').doc(ticketId).get();
+      if (!ticketSnap.exists()) return res.status(404).json({ error: "ไม่พบ Ticket" });
+      
+      const ticketData = ticketSnap.data();
+      const isOwner = ticketData.userId === userId;
+      const isAdminReply = role === 'admin';
+      
+      if (!isOwner && !isAdminReply) return res.status(403).json({ error: "ไม่มีสิทธิ์ตอบกลับ Ticket นี้" });
+
+      await db.collection('tickets').doc(ticketId).collection('messages').add({
+        senderId: userId,
+        senderRole: role,
+        content: content || '',
+        createdAt: new Date().toISOString()
+      });
+
+      await db.collection('tickets').doc(ticketId).update({
+        status: isAdminReply ? 'answered' : 'waiting',
+        updatedAt: new Date().toISOString()
+      });
+
+      return res.json({ success: true });
+
+    } catch (error: any) {
+      console.error("Reply ticket error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/tickets/:ticketId/close", authenticate, async (req: any, res) => {
+    try {
+      const { ticketId } = req.params;
+      const userId = req.user.uid;
+
+      const ticketRef = db.collection('tickets').doc(ticketId);
+      const ticketSnap = await ticketRef.get();
+      if (!ticketSnap.exists()) return res.status(404).json({ error: "ไม่พบ Ticket" });
+      
+      const ticketData = ticketSnap.data();
+      const isOwner = ticketData.userId === userId;
+      
+      let isAdminUser = false;
+      if (!isOwner) {
+         const userSnap = await db.collection('users').doc(userId).get();
+         if (userSnap.exists() && userSnap.data()?.role === 'admin') isAdminUser = true;
+      }
+      
+      if (!isOwner && !isAdminUser) return res.status(403).json({ error: "ไม่มีสิทธิ์ปิด Ticket นี้" });
+
+      // Images are stored as base64 in the documents directly,
+      // so no need to delete them from Cloud Storage.
+
+      // Update ticket status
+      await ticketRef.update({
+        status: 'closed',
+        closedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Notify Discord
+      sendDiscordNotification(`✅ **Ticket ปิดงานแล้ว!**\n**ID:** \`${ticketId}\`\n**หัวข้อ:** ${ticketData.title}\n**ผู้ปิดงาน:** ${isAdminUser ? 'แอดมิน' : 'ลูกค้า'} (${req.user.email || 'Unknown'})`);
+
+      return res.json({ success: true });
+
+    } catch (error: any) {
+      console.error("Close ticket error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  // --- END TICKETS API ---
 
   // Manual Topup Submission
   app.post("/api/topup/manual", authenticate, topupLimiter, async (req: any, res) => {

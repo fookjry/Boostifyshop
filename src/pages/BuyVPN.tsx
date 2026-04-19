@@ -26,8 +26,12 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   const [error, setError] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const hasUsedTrial = () => {
-    return !!profile?.hasUsedTrial;
+  const canUseTrial = () => {
+    if (!profile?.lastTrialAt) return true;
+    const lastTrialTime = new Date(profile.lastTrialAt).getTime();
+    const now = new Date().getTime();
+    const hoursSinceLastTrial = (now - lastTrialTime) / (1000 * 60 * 60);
+    return hoursSinceLastTrial >= 24;
   };
 
   useEffect(() => {
@@ -113,7 +117,10 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   };
 
   const handleFreeTrial = async () => {
-    if (hasUsedTrial()) return;
+    if (!canUseTrial()) {
+      setError('คุณใช้งานทดลองฟรีไปแล้วในวันนี้ กรุณารอ 24 ชั่วโมงเพื่อทดลองใหม่อีกครั้ง');
+      return;
+    }
     if (!selectedServer) return;
     
     if (selectedServer.status !== 'online') {
@@ -343,9 +350,9 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                   </div>
                 </div>
                 
-                {hasUsedTrial() ? (
+                {!canUseTrial() ? (
                   <div className="text-amber-400/70 text-sm font-bold bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20 backdrop-blur-sm">
-                    คุณใช้สิทธิ์ทดลองแล้ว
+                    ใช้สิทธิ์สำหรับวันนี้ไปแล้ว (รับใหม่ได้พรุ่งนี้)
                   </div>
                 ) : trialSuccess ? (
                   <div className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-500/20 px-6 py-3 rounded-2xl border border-emerald-500/30 animate-bounce shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-sm">
@@ -486,7 +493,18 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                (selectedServer?.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
             </button>
 
-            <p className="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest">
+            {canUseTrial() && (
+              <button 
+                onClick={handleFreeTrial}
+                disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+                className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4"
+              >
+                {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : trialSuccess ? <Check className="w-5 h-5" /> : <Gift className="w-5 h-5" />}
+                {trialSuccess ? 'รับสิทธิ์สำเร็จ!' : 'ทดลองใช้ฟรี 1 ชั่วโมง'}
+              </button>
+            )}
+
+            <p className="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-4">
               เปิดใช้งานระบบติดตั้งอัตโนมัติ
             </p>
           </div>

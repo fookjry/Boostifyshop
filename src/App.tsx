@@ -18,6 +18,10 @@ import { Transactions } from './pages/admin/Transactions';
 import { NetworkManagement } from './pages/admin/NetworkManagement';
 import { AppIconManager } from './pages/admin/AppIconManager';
 import { AdminDeviceOptions } from './pages/AdminDeviceOptions';
+import { TicketsList } from './pages/tickets/TicketsList';
+import { CreateTicket } from './pages/tickets/CreateTicket';
+import { TicketDetail } from './pages/tickets/TicketDetail';
+import { AdminTickets } from './pages/admin/AdminTickets';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -136,6 +140,11 @@ export default function App() {
                 <Route path="/topup" element={user ? <Topup user={user} profile={profile} /> : <Navigate to="/login" />} />
                 <Route path="/tutorial" element={<Tutorial />} />
                 
+                {/* Tickets Routes */}
+                <Route path="/tickets" element={user ? <TicketsList user={user} /> : <Navigate to="/login" />} />
+                <Route path="/tickets/create" element={user ? <CreateTicket /> : <Navigate to="/login" />} />
+                <Route path="/tickets/:id" element={user ? <TicketDetail user={user} profile={profile} /> : <Navigate to="/login" />} />
+                
                 {/* Admin Routes */}
                 <Route path="/admin" element={profile?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
                 <Route path="/admin/users" element={profile?.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
@@ -144,6 +153,7 @@ export default function App() {
                 <Route path="/admin/icons" element={profile?.role === 'admin' ? <AppIconManager /> : <Navigate to="/" />} />
                 <Route path="/admin/devices" element={profile?.role === 'admin' ? <AdminDeviceOptions /> : <Navigate to="/" />} />
                 <Route path="/admin/transactions" element={profile?.role === 'admin' ? <Transactions /> : <Navigate to="/" />} />
+                <Route path="/admin/tickets" element={profile?.role === 'admin' ? <AdminTickets /> : <Navigate to="/" />} />
               </Routes>
             </main>
           </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { LogOut, User as UserIcon, Wallet, ShieldCheck, LayoutDashboard, ChevronDown, Users, CreditCard, Server, Activity, BookOpen, Wifi } from 'lucide-react';
+import { LogOut, User as UserIcon, Wallet, ShieldCheck, LayoutDashboard, ChevronDown, Users, CreditCard, Server, Activity, BookOpen, Wifi, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function Navbar({ user, profile, settings }: { user: any; profile: any; settings: any }) {
@@ -30,6 +30,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', icon: Server },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', icon: Wifi },
     { to: '/admin/transactions', label: 'รายการธุรกรรม', icon: CreditCard },
+    { to: '/admin/tickets', label: 'Support Tickets', icon: MessageSquare },
   ];
 
   const navLinks = [
@@ -37,6 +38,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
     { to: '/buy', label: 'ซื้อ VPN', icon: Server },
     { to: '/topup', label: 'เติมเงิน', icon: Wallet },
     { to: '/tutorial', label: 'คู่มือการใช้งาน', icon: BookOpen },
+    { to: '/tickets', label: 'แจ้งปัญหา', icon: MessageSquare },
   ];
 
   const siteName = settings?.siteName || 'VPNSaaS';
@@ -144,35 +146,39 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
 
       {/* Bottom Navigation for Mobile */}
       {user && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel border-t-0 border-white/10 z-50 pb-safe">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-white/10 z-50 safe-area-bottom">
           <div className="flex items-center justify-around h-16">
             {navLinks.map(link => {
               const isActive = location.pathname === link.to;
+              // Shorten labels for mobile
+              const label = link.label === 'คู่มือการใช้งาน' ? 'คู่มือ' : 
+                          link.label === 'VPN ของฉัน' ? 'VPN' : link.label;
+              
               return (
                 <Link 
                   key={link.to} 
                   to={link.to} 
-                  className={`flex flex-col items-center justify-center gap-1 transition-all px-2 ${isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-slate-400 hover:text-white'}`}
+                  className={`flex flex-col items-center justify-center gap-1 transition-all px-1 flex-1 min-w-0 ${isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-slate-400 hover:text-white'}`}
                 >
-                  <link.icon className="w-5 h-5" />
-                  <span className="text-[10px] font-medium">{link.label}</span>
+                  <link.icon className="w-5 h-5 shrink-0" />
+                  <span className="text-[9px] font-medium truncate w-full text-center">{label}</span>
                 </Link>
               );
             })}
             {profile?.role === 'admin' && (
               <Link 
                 to="/admin" 
-                className={`flex flex-col items-center justify-center gap-1 transition-all px-2 relative ${location.pathname.startsWith('/admin') ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-400 hover:text-amber-300'}`}
+                className={`flex flex-col items-center justify-center gap-1 transition-all px-1 flex-1 min-w-0 relative ${location.pathname.startsWith('/admin') ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-400 hover:text-amber-300'}`}
               >
                 <div className="relative">
-                  <ShieldCheck className="w-5 h-5" />
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
                   {pendingTopups > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] w-3 h-3 flex items-center justify-center rounded-full font-black animate-pulse">
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-black animate-pulse border border-slate-950">
                       {pendingTopups > 9 ? '9+' : pendingTopups}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-medium">แอดมิน</span>
+                <span className="text-[9px] font-medium truncate w-full text-center">แอดมิน</span>
               </Link>
             )}
           </div>

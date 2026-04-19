@@ -11,6 +11,7 @@ export function Admin() {
   const [userMap, setUserMap] = useState<{ [key: string]: string }>({});
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [discordInvite, setDiscordInvite] = useState('');
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [siteName, setSiteName] = useState('VPNSaaS');
   const [announcement, setAnnouncement] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -57,6 +58,7 @@ export function Admin() {
       if (doc.exists()) {
         const data = doc.data();
         setDiscordInvite(data.discordInvite || '');
+        setDiscordWebhookUrl(data.discordWebhookUrl || '');
         setSiteName(data.siteName || 'VPNSaaS');
         setAnnouncement(data.announcement || '');
         setLogoUrl(data.logoUrl || '');
@@ -142,8 +144,9 @@ export function Admin() {
     { to: '/admin/users', label: 'จัดการผู้ใช้', desc: 'จัดการยอดเงินและ VPN ของผู้ใช้', icon: Users, color: 'blue' },
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', desc: 'ตั้งค่าเซิร์ฟเวอร์และราคา', icon: Server, color: 'amber' },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', desc: 'ตั้งค่าเครือข่ายและ Inbound ID', icon: Wifi, color: 'indigo' },
-    { to: '/admin/devices', label: 'จัดการจำนวนอุปกรณ์', desc: 'ตั้งค่าตัวเลือกจำนวนอุปกรณ์และราคา', icon: Server, color: 'pink' },
-    { to: '/admin/transactions', label: 'ยืนยันการโอนเงิน', desc: 'ตรวจสอบและอนุมัติสลิปสำรอง', icon: CreditCard, color: 'amber' },
+    { to: '/admin/devices', label: 'จัดการจำนวนอุปกรณ์', desc: 'ตั้งค่าตัวเลือกและราคา', icon: Server, color: 'pink' },
+    { to: '/admin/transactions', label: 'ยืนยันการโอนเงิน', desc: 'ตรวจสอบสลิป', icon: CreditCard, color: 'emerald' },
+    { to: '/admin/tickets', label: 'Support Tickets', desc: 'ตอบกลับปัญหาลูกค้า', icon: MessageSquare, color: 'purple' },
   ];
 
   return (
@@ -270,7 +273,7 @@ export function Admin() {
                   onClick={async () => {
                     setSavingGlobal(true);
                     try {
-                      await setDoc(doc(db, 'settings', 'global'), { discordInvite, siteName, announcement }, { merge: true });
+                      await setDoc(doc(db, 'settings', 'global'), { discordInvite, discordWebhookUrl, siteName, announcement }, { merge: true });
                     } catch (error) {
                       handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
                     } finally {
@@ -284,6 +287,17 @@ export function Admin() {
                   บันทึก
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">Discord Webhook URL (สำหรับแจ้งเตือนแอดมิน)</label>
+              <input 
+                placeholder="https://discord.com/api/webhooks/..." 
+                value={discordWebhookUrl}
+                onChange={e => setDiscordWebhookUrl(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">แจ้งเตือนเมื่อมีลูกค้าเปิด-ปิด Ticket</p>
             </div>
           </div>
         </section>
