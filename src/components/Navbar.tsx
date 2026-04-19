@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { LogOut, User as UserIcon, Wallet, ShieldCheck, LayoutDashboard, ChevronDown, Users, CreditCard, Server, Activity, BookOpen, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -8,6 +9,15 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
   const navigate = useNavigate();
   const location = useLocation();
   const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [pendingTopups, setPendingTopups] = useState(0);
+
+  useEffect(() => {
+    if (user && profile?.role === 'admin') {
+      const q = query(collection(db, 'manual_topups'), where('status', '==', 'pending'));
+      const unsub = onSnapshot(q, (snap) => setPendingTopups(snap.size));
+      return () => unsub();
+    }
+  }, [user, profile?.role]);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -66,9 +76,14 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                   <div className="relative">
                     <button 
                       onClick={() => setShowAdminMenu(!showAdminMenu)}
-                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-all drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]"
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-all drop-shadow-[0_0_8px_rgba(251,191,36,0.3)] relative"
                     >
                       แอดมิน <ChevronDown className={`w-4 h-4 transition-transform ${showAdminMenu ? 'rotate-180' : ''}`} />
+                      {pendingTopups > 0 && (
+                        <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-black drop-shadow-md animate-pulse">
+                          {pendingTopups > 9 ? '9+' : pendingTopups}
+                        </span>
+                      )}
                     </button>
 
                     <AnimatePresence>
@@ -86,10 +101,17 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                                 key={link.to}
                                 to={link.to}
                                 onClick={() => setShowAdminMenu(false)}
-                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                                className="flex items-center justify-between px-4 py-3 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
                               >
-                                <link.icon className="w-4 h-4" />
-                                {link.label}
+                                <div className="flex items-center gap-3">
+                                  <link.icon className="w-4 h-4" />
+                                  {link.label}
+                                </div>
+                                {link.to === '/admin/transactions' && pendingTopups > 0 && (
+                                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                                    {pendingTopups}
+                                  </span>
+                                )}
                               </Link>
                             ))}
                           </motion.div>
@@ -140,9 +162,16 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
             {profile?.role === 'admin' && (
               <Link 
                 to="/admin" 
-                className={`flex flex-col items-center justify-center gap-1 transition-all px-2 ${location.pathname.startsWith('/admin') ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-400 hover:text-amber-300'}`}
+                className={`flex flex-col items-center justify-center gap-1 transition-all px-2 relative ${location.pathname.startsWith('/admin') ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-400 hover:text-amber-300'}`}
               >
-                <ShieldCheck className="w-5 h-5" />
+                <div className="relative">
+                  <ShieldCheck className="w-5 h-5" />
+                  {pendingTopups > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] w-3 h-3 flex items-center justify-center rounded-full font-black animate-pulse">
+                      {pendingTopups > 9 ? '9+' : pendingTopups}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-medium">แอดมิน</span>
               </Link>
             )}

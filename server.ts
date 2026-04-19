@@ -10,10 +10,11 @@ import helmet from "helmet";
 import cors from "cors";
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from "express-rate-limit";
+import crypto from "crypto";
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp } from "firebase/firestore";
+import { getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, query, where, limit } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 
@@ -970,6 +971,9 @@ async function startServer() {
                 });
               });
             } catch (txError: any) {
+              if (txError.message && txError.message.includes('สลิปนี้ถูกใช้งานไปแล้ว')) {
+                return res.status(400).json({ success: false, error: txError.message });
+              }
               try {
                 handleFirestoreError(txError, OperationType.WRITE, 'topup/verify/transfer');
               } catch (e: any) {
@@ -1103,6 +1107,171 @@ async function startServer() {
         return res.status(500).json({ success: false, error: e.message });
       }
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Manual Topup Submission
+  app.post("/api/topup/manual", authenticate, topupLimiter, async (req: any, res) => {
+    const { userId, amount, imageBase64 } = req.body;
+    
+    if (req.user.uid !== userId) {
+      return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
+    }
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: "จำนวนเงินไม่ถูกต้อง" });
+    }
+
+    if (!imageBase64 || !imageBase64.includes('base64,')) {
+      return res.status(400).json({ success: false, error: "กรุณาอัปโหลดรูปภาพสลิปที่ถูกต้อง" });
+    }
+
+    try {
+      // 1. Spam check: Limit to 3 pending requests
+      const pendingQ = query(collection(dbModular, 'manual_topups'), where('userId', '==', userId));
+      const pendingSnap = await getDocs(pendingQ);
+      
+      let pendingCount = 0;
+      pendingSnap.docs.forEach((doc: any) => {
+        if (doc.data().status === 'pending') {
+          pendingCount++;
+        }
+      });
+
+      if (pendingCount >= 3) {
+        return res.status(400).json({ success: false, error: "คุณมีรายการรอตรวจสอบมากเกินไป กรุณารอแอดมินดำเนินการ" });
+      }
+
+      // 2. Hash image to prevent duplicate slip uploads
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const imageHash = crypto.createHash('sha256').update(base64Data).digest('hex');
+
+      // Check if hash already exists in any manual topup
+      const existingSlipQ = query(collection(dbModular, 'manual_topups'), where('slipHash', '==', imageHash), limit(1));
+      const existingSlipSnap = await getDocs(existingSlipQ);
+      
+      if (!existingSlipSnap.empty) {
+        return res.status(400).json({ success: false, error: "สลิปนี้ถูกใช้งานไปแล้วในระบบ กรุณาใช้สลิปอื่น" });
+      }
+
+      // Fetch user email
+      const userSnap = await db.collection('users').doc(userId).get();
+      const userEmail = userSnap.exists() ? userSnap.data()?.email : 'Unknown';
+
+      // Ensure base64 is not excessively large (limit to approx 500KB)
+      if (base64Data.length > 700000) {
+         return res.status(400).json({ success: false, error: "ขนาดไฟล์รูปภาพใหญ่เกินไป กรุณาลดขนาดภาพ (ไม่เกิน 500KB)" });
+      }
+
+      // 4. Save request
+      await db.collection('manual_topups').add({
+        userId,
+        userEmail,
+        amount: Number(amount),
+        slipImage: imageBase64,
+        slipHash: imageHash,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Manual topup error:", error);
+      return res.status(500).json({ success: false, error: "เกิดข้อผิดพลาดในการส่งข้อมูล" });
+    }
+  });
+
+  // Admin: Approve Manual Topup
+  app.post("/api/admin/topup/manual/approve", authenticate, adminOnly, async (req: any, res) => {
+    const { id, amount } = req.body; // Amount can be overridden by admin
+    if (!id || !amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: "ข้อมูลไม่ถูกต้อง" });
+    }
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const topupRef = db.collection('manual_topups').doc(id);
+        const topupSnap = await transaction.get(topupRef);
+
+        if (!topupSnap.exists()) {
+          throw new Error("ไม่พบรายการแจ้งโอนเงิน");
+        }
+
+        const topupData = topupSnap.data() || {};
+        if (topupData.status !== 'pending') {
+          throw new Error(`รายการนี้ถูกดำเนินการไปแล้ว (สถานะ: ${topupData.status})`);
+        }
+
+        const userId = topupData.userId;
+        const userRef = db.collection('users').doc(userId);
+        const userSnap = await transaction.get(userRef);
+        const currentBalance = userSnap.exists() ? userSnap.data()?.balance || 0 : 0;
+        const userEmail = topupData.userEmail || (userSnap.exists() ? userSnap.data()?.email : 'Unknown');
+
+        // Update Topup
+        transaction.update(topupRef, {
+          status: 'approved',
+          approvedAmount: Number(amount),
+          updatedAt: new Date().toISOString(),
+          processedBy: req.user.uid
+        });
+
+        // Update User Balance
+        transaction.update(userRef, {
+          balance: currentBalance + Number(amount)
+        });
+
+        // Add Transaction Record
+        const txRef = db.collection('transactions').doc();
+        transaction.set(txRef, {
+          userId: userId,
+          userEmail: userEmail,
+          amount: Number(amount),
+          type: 'topup',
+          timestamp: new Date().toISOString(),
+          note: `เติมเงินสำรอง (แจ้งโอน) - รหัสชั่วคราว`,
+          reference: `MANUAL-${id.substring(0, 8)}`
+        });
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+  });
+
+  // Admin: Reject Manual Topup
+  app.post("/api/admin/topup/manual/reject", authenticate, adminOnly, async (req: any, res) => {
+    const { id, reason } = req.body;
+    if (!id || !reason) {
+      return res.status(400).json({ success: false, error: "กรุณาระบุเหตุผลการปฏิเสธ" });
+    }
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const topupRef = db.collection('manual_topups').doc(id);
+        const topupSnap = await transaction.get(topupRef);
+
+        if (!topupSnap.exists()) {
+          throw new Error("ไม่พบรายการแจ้งโอนเงิน");
+        }
+
+        const topupData = topupSnap.data() || {};
+        if (topupData.status !== 'pending') {
+          throw new Error(`รายการนี้ถูกดำเนินการไปแล้ว (สถานะ: ${topupData.status})`);
+        }
+
+        transaction.update(topupRef, {
+          status: 'rejected',
+          reason: reason,
+          updatedAt: new Date().toISOString(),
+          processedBy: req.user.uid
+        });
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
     }
   });
 

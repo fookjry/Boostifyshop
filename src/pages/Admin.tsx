@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, getDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Server, Users, CreditCard, Activity, ShieldAlert, ChevronRight, TrendingUp, DollarSign, MessageSquare, Save, Loader2, Wifi, Upload, Globe, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -20,10 +20,11 @@ export function Admin() {
   const [minTopup, setMinTopup] = useState(50);
   const [easySlipApiKey, setEasySlipApiKey] = useState('');
   const [darkxApiKey, setDarkxApiKey] = useState('');
-  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open' });
+  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [pendingTopups, setPendingTopups] = useState(0);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,7 +86,8 @@ export function Admin() {
         const data = doc.data();
         setPaymentMethods({
           promptpay: data.promptpay || 'open',
-          truemoney: data.truemoney || 'open'
+          truemoney: data.truemoney || 'open',
+          manual: data.manual || 'open'
         });
       }
     });
@@ -119,6 +121,10 @@ export function Admin() {
       }));
     });
 
+    const unsubPending = onSnapshot(query(collection(db, 'manual_topups'), where('status', '==', 'pending')), (snap) => {
+      setPendingTopups(snap.size);
+    });
+
     return () => {
       unsubGlobal();
       unsubPayment();
@@ -128,16 +134,16 @@ export function Admin() {
       unsubServers();
       unsubTx();
       unsubVpns();
+      unsubPending();
     };
   }, []);
 
   const menuItems = [
     { to: '/admin/users', label: 'จัดการผู้ใช้', desc: 'จัดการยอดเงินและ VPN ของผู้ใช้', icon: Users, color: 'blue' },
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', desc: 'ตั้งค่าเซิร์ฟเวอร์และราคา', icon: Server, color: 'amber' },
-    { to: '/admin/icons', label: 'จัดการรูปภาพแอพ', desc: 'อัปโหลดไอคอนแอพ (1-10)', icon: ImageIcon, color: 'blue' },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', desc: 'ตั้งค่าเครือข่ายและ Inbound ID', icon: Wifi, color: 'indigo' },
     { to: '/admin/devices', label: 'จัดการจำนวนอุปกรณ์', desc: 'ตั้งค่าตัวเลือกจำนวนอุปกรณ์และราคา', icon: Server, color: 'pink' },
-    { to: '/admin/transactions', label: 'ธุรกรรมและวิเคราะห์', desc: 'ดูบันทึกและกราฟรายได้', icon: CreditCard, color: 'emerald' },
+    { to: '/admin/transactions', label: 'ยืนยันการโอนเงิน', desc: 'ตรวจสอบและอนุมัติสลิปสำรอง', icon: CreditCard, color: 'amber' },
   ];
 
   return (
@@ -171,8 +177,13 @@ export function Admin() {
           <Link 
             key={i} 
             to={item.to}
-            className="group glass-panel p-6 md:p-8 hover:border-blue-500/50 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:bg-white/5"
+            className="group glass-panel p-6 md:p-8 hover:border-blue-500/50 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:bg-white/5 relative"
           >
+            {item.to === '/admin/transactions' && pendingTopups > 0 && (
+              <span className="absolute top-4 right-4 bg-red-500 text-white text-[12px] w-6 h-6 flex items-center justify-center rounded-full font-black drop-shadow-md animate-bounce">
+                {pendingTopups > 9 ? '9+' : pendingTopups}
+              </span>
+            )}
             <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-${item.color}-500/20 flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform border border-${item.color}-500/30 shadow-[0_0_10px_rgba(currentColor,0.2)]`}>
               <item.icon className={`w-6 h-6 md:w-7 md:h-7 text-${item.color}-400 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]`} />
             </div>
@@ -185,7 +196,7 @@ export function Admin() {
         ))}
       </div>
 
-      {/* Global & Payment Settings */}
+      {/* Global Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="glass-panel p-6 md:p-8">
           <div className="flex items-center gap-4 mb-6">
@@ -421,6 +432,28 @@ export function Admin() {
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.promptpay === mode 
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
+                            : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                        }`}
+                      >
+                        {mode === 'open' ? 'เปิด' : mode === 'closed' ? 'ปิด' : 'ปรับปรุง'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Manual Settings */}
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-300 font-bold">แจ้งโอนเงิน (สำรอง)</p>
+                  <div className="flex gap-2">
+                    {['open', 'closed', 'maintenance'].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={async () => {
+                          setPaymentMethods(prev => ({ ...prev, manual: mode }));
+                          await setDoc(doc(db, 'settings', 'payment_methods'), { manual: mode }, { merge: true });
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                          paymentMethods.manual === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
                             : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
                         }`}

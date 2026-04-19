@@ -99,6 +99,12 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Manual Topups Rules
+    match /manual_topups/{id} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
     // Global Settings Rules
     match /settings/{settingId} {
       allow read: if settingId != 'payment_keys' || isAdmin();

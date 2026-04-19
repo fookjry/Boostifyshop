@@ -59,17 +59,10 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
       setVpns(list);
     });
 
-    // Load ALL VPNs for capacity check
-    const unsubAllVpns = onSnapshot(collection(db, 'vpns'), (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllVpns(list);
-    });
-
     return () => {
       unsubscribe();
       unsubNetworks();
       unsubVpns();
-      unsubAllVpns();
     };
   }, []);
 
@@ -250,7 +243,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                     <div>
                       <p className="font-bold text-white drop-shadow-sm">{s.name}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                        ผู้ใช้งาน: {allVpns.filter(v => v.serverId === s.id && new Date(v.expireAt) > new Date()).length} / {s.maxUsers || '∞'}
+                        ผู้ใช้งาน: {s.currentUsers || 0} / {s.maxUsers || '∞'}
                       </p>
                     </div>
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${s.status === 'online' ? 'bg-emerald-400 text-emerald-400' : 'bg-red-400 text-red-400'}`} />
@@ -484,13 +477,13 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
             </label>
 
             <button 
-              disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && allVpns.filter(v => v.serverId === selectedServer.id && new Date(v.expireAt) > new Date()).length >= selectedServer.maxUsers)}
+              disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
               onClick={prePurchaseCheck}
               className="w-full glass-button py-4 text-lg flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 
                (!selectedServer || !selectedNetwork) ? 'เลือกเซิร์ฟเวอร์และเครือข่าย' :
-               (selectedServer?.maxUsers && allVpns.filter(v => v.serverId === selectedServer.id && new Date(v.expireAt) > new Date()).length >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
+               (selectedServer?.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
             </button>
 
             <p className="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest">

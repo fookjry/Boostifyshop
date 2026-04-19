@@ -1,19 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, increment, addDoc, collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Wallet, Gift, QrCode, ArrowRight, Loader2, CheckCircle2, AlertCircle, Smartphone, Copy, Check, TrendingUp, TrendingDown, X, ClipboardPaste } from 'lucide-react';
+import { Wallet, Gift, QrCode, ArrowRight, Loader2, CheckCircle2, AlertCircle, Smartphone, Copy, Check, TrendingUp, TrendingDown, X, XCircle, ClipboardPaste } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export function Topup({ user, profile }: { user: any; profile: any }) {
-  const [method, setMethod] = useState<'gift' | 'transfer'>('gift');
+  const [method, setMethod] = useState<'gift' | 'transfer' | 'manual'>('gift');
   const [giftLink, setGiftLink] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [manualPending, setManualPending] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch manual topups for user
+    const qManual = query(
+      collection(db, 'manual_topups'), 
+      where('userId', '==', user.uid)
+    );
+    const unsubManual = onSnapshot(qManual, (snap) => {
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setManualPending(list.slice(0, 5));
+    });
+
+    return () => {
+      unsubManual();
+    }
+  }, [user.uid]);
 
   const validateLink = (link: string) => {
     if (!link) {
@@ -31,7 +50,7 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     }
   }, [giftLink, method]);
   const [paymentSettings, setPaymentSettings] = useState({ trueMoneyNumber: '', paymentQrUrl: '' });
-  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open' });
+  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
   const [copied, setCopied] = useState(false);
 
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -51,7 +70,8 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
         const data = doc.data();
         setPaymentMethods({
           promptpay: data.promptpay || 'open',
-          truemoney: data.truemoney || 'open'
+          truemoney: data.truemoney || 'open',
+          manual: data.manual || 'open'
         });
       }
     });
@@ -85,8 +105,8 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
 
   const isAdmin = profile?.role === 'admin';
 
-  const isMethodAvailable = (methodKey: 'truemoney' | 'promptpay') => {
-    const mode = paymentMethods[methodKey];
+  const isMethodAvailable = (methodKey: 'truemoney' | 'promptpay' | 'manual') => {
+    const mode = (paymentMethods as any)[methodKey];
     if (mode === 'open') return true;
     if (mode === 'maintenance' && isAdmin) return true;
     return false;
@@ -128,24 +148,50 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
     }
   };
 
-  const allDisabled = !isMethodAvailable('promptpay') && !isMethodAvailable('truemoney');
+  const handleManualTopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess(false);
 
-  if (allDisabled) {
-    const isMaintenance = paymentMethods.promptpay === 'maintenance' || paymentMethods.truemoney === 'maintenance';
-    return (
-      <div className="max-w-2xl mx-auto py-20 text-center space-y-6">
-        <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${isMaintenance ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
-          <AlertCircle className="w-10 h-10" />
-        </div>
-        <h1 className="text-3xl font-bold text-white">{isMaintenance ? 'ระบบกำลังปิดปรับปรุง' : 'ระบบเติมเงินปิดให้บริการ'}</h1>
-        <p className="text-slate-400">
-          {isMaintenance 
-            ? 'ขออภัยในความไม่สะดวก ขณะนี้ระบบเติมเงินกำลังอยู่ระหว่างการปรับปรุงเพื่อประสิทธิภาพที่ดีขึ้น' 
-            : 'ขออภัย ขณะนี้ระบบเติมเงินยังไม่เปิดให้บริการในขณะนี้'}
-        </p>
-      </div>
-    );
-  }
+    if (!manualAmount || isNaN(Number(manualAmount)) || Number(manualAmount) <= 0) {
+      setError('กรุณากรอกจำนวนเงินให้ถูกต้อง');
+      setLoading(false);
+      return;
+    }
+
+    if (!giftLink) {
+      setError('กรุณาอัปโหลดรูปภาพสลิป');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const token = await user.getIdToken();
+      const response = await axios.post('/api/topup/manual', {
+        userId: user.uid,
+        amount: Number(manualAmount),
+        imageBase64: giftLink // Using giftLink state to store the base64 image
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        setSuccess(true);
+        setGiftLink('');
+        setManualAmount('');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const autoDisabled = !isMethodAvailable('promptpay') && !isMethodAvailable('truemoney');
+  const manualAvailable = isMethodAvailable('manual');
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -153,6 +199,20 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
         <h1 className="text-3xl font-bold text-white drop-shadow-md">เติมเงินเข้าวอลเล็ท</h1>
         <p className="text-slate-300">เพิ่มเงินในบัญชีของคุณเพื่อซื้อ VPN</p>
       </header>
+      
+      {autoDisabled && manualAvailable && method !== 'manual' && (
+        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 p-4 rounded-xl text-center backdrop-blur-sm -mb-4">
+          <p className="font-bold">ระบบเติมเงินอัตโนมัติกำลังปิดปรับปรุง</p>
+          <p className="text-sm">กรุณาใช้ระบบ "เติมเงินสำรอง" ด้านล่างแทน</p>
+        </div>
+      )}
+
+      {autoDisabled && !manualAvailable && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-center backdrop-blur-sm -mb-4">
+          <p className="font-bold">ระบบเติมเงินทั้งหมดกำลังปิดปรับปรุงชั่วคราว</p>
+          <p className="text-sm">ขออภัยในความไม่สะดวก กรุณาลองใหม่ในภายหลัง</p>
+        </div>
+      )}
 
       <div className="glass-panel p-8 space-y-8">
         <div className="flex p-1 bg-black/20 rounded-2xl border border-white/10 backdrop-blur-sm">
@@ -176,7 +236,7 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
             disabled={!isMethodAvailable('promptpay')}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all relative group ${method === 'transfer' ? 'bg-blue-600/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-blue-500/50 backdrop-blur-md' : 'text-slate-400 hover:text-white hover:bg-white/5'} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <QrCode className="w-5 h-5" /> โอนเงิน / QR Code
+            <QrCode className="w-5 h-5" /> โอนเงินอัตโนมัติ
             {!isMethodAvailable('promptpay') && (
               <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
                 {paymentMethods.promptpay === 'maintenance' ? 'กำลังปรับปรุง (เฉพาะแอดมิน)' : 'ปิดให้บริการ'}
@@ -186,9 +246,24 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
               <div className="absolute -top-2 -right-2 bg-amber-500 text-[8px] px-1.5 py-0.5 rounded-full font-black text-black animate-pulse">MAINTENANCE</div>
             )}
           </button>
+          <button 
+            onClick={() => setMethod('manual')}
+            disabled={!isMethodAvailable('manual')}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all relative group ${method === 'manual' ? 'bg-amber-600/80 text-white shadow-[0_0_15px_rgba(217,119,6,0.5)] border border-amber-500/50 backdrop-blur-md' : 'text-slate-400 hover:text-white hover:bg-white/5'} disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            <Wallet className="w-5 h-5" /> เติมเงินสำรอง
+            {!isMethodAvailable('manual') && (
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
+                {(paymentMethods as any).manual === 'maintenance' ? 'กำลังปรับปรุง (เฉพาะแอดมิน)' : 'ปิดให้บริการ'}
+              </div>
+            )}
+            {(paymentMethods as any).manual === 'maintenance' && isAdmin && (
+              <div className="absolute -top-2 -right-2 bg-amber-500 text-[8px] px-1.5 py-0.5 rounded-full font-black text-black animate-pulse">MAINTENANCE</div>
+            )}
+          </button>
         </div>
 
-        {method === 'gift' ? (
+        {method === 'gift' && (
           <form onSubmit={handleTopup} className="space-y-6">
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2 drop-shadow-sm">
@@ -310,7 +385,9 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'ตรวจสอบและเติมเงิน'}
             </button>
           </form>
-        ) : (
+        )}
+        
+        {method === 'transfer' && (
           <div className="text-center space-y-6 py-4">
             <div className="bg-blue-500/20 border border-blue-400/30 rounded-2xl p-4 mb-2 backdrop-blur-sm shadow-[0_0_15px_rgba(59,130,246,0.2)]">
               <p className="text-blue-300 text-sm font-bold flex items-center justify-center gap-2">
@@ -368,12 +445,149 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
             </form>
           </div>
         )}
+
+        {method === 'manual' && (
+          <div className="text-center space-y-6 py-4">
+            <div className="bg-amber-500/20 border border-amber-400/30 rounded-2xl p-4 mb-2 backdrop-blur-sm shadow-[0_0_15px_rgba(217,119,6,0.2)]">
+              <p className="text-amber-300 text-sm font-bold flex items-center justify-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 drop-shadow-[0_0_8px_rgba(217,119,6,0.5)]" /> เติมเงินด้วยการโอนเงิน (รอยืนยันจากแอดมิน)
+              </p>
+              <p className="text-amber-200/90 text-xs font-medium bg-amber-900/30 py-1.5 px-3 rounded-lg inline-block border border-amber-500/20">
+                ช่องทางนี้ โอนเงินได้ตามใจ ไม่มีขั้นต่ำ
+              </p>
+            </div>
+            
+            {paymentSettings.paymentQrUrl ? (
+              <div className="bg-white/10 p-4 rounded-3xl inline-block shadow-2xl border border-white/20 backdrop-blur-md">
+                <img src={paymentSettings.paymentQrUrl} alt="Payment QR" className="max-w-[240px] h-auto rounded-xl" />
+              </div>
+            ) : (
+              <div className="bg-black/20 p-12 rounded-3xl border border-white/10 inline-block backdrop-blur-sm">
+                <QrCode className="w-16 h-16 text-slate-500 mx-auto drop-shadow-sm" />
+                <p className="text-slate-400 text-xs mt-4 font-bold uppercase tracking-widest">ยังไม่ได้ตั้งค่า QR Code</p>
+              </div>
+            )}
+
+            <form onSubmit={handleManualTopup} className="space-y-4 pt-4 border-t border-white/10">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300 text-left block drop-shadow-sm">จำนวนเงินที่โอน (บาท)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={manualAmount}
+                  onChange={(e) => setManualAmount(e.target.value)}
+                  placeholder="เช่น 100"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-white focus:border-amber-500/50 outline-none transition-all backdrop-blur-sm"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300 text-left block drop-shadow-sm">อัปโหลดสลิปโอนเงิน (รองรับ .jpg, .png)</label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Check file size (limit to 500KB client-side roughly is good but let's just use canvas to compress it)
+                      // A simple FileReader for now, server handles exact rejection if too large.
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setGiftLink(reader.result as string); // Using giftLink state to store the base64
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-white focus:border-amber-500/50 outline-none transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-500/20 file:text-amber-400 hover:file:bg-amber-500/30 backdrop-blur-sm"
+                  required
+                />
+              </div>
+
+              {error && <div className="bg-red-500/20 border border-red-500/30 p-4 rounded-xl text-red-300 text-sm flex items-center gap-2 text-left backdrop-blur-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]"><AlertCircle className="w-5 h-5 shrink-0 text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" /> {error}</div>}
+              {success && <div className="bg-emerald-500/20 border border-emerald-500/30 p-4 rounded-xl text-emerald-300 text-sm flex items-center gap-2 text-left backdrop-blur-sm shadow-[0_0_15px_rgba(52,211,153,0.2)]"><CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" /> แจ้งชำระเงินสำเร็จ กรุณารอแอดมินตรวจสอบ</div>}
+
+              <button 
+                disabled={loading || !giftLink || !manualAmount}
+                className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white shadow-lg py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed border border-amber-400/30"
+              >
+                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'แจ้งชำระเงิน (ระบบสำรอง)'}
+              </button>
+            </form>
+          </div>
+        )}
+
       </div>
 
       <div className="glass-panel p-6">
         <h4 className="font-bold text-white mb-4 flex items-center gap-2 drop-shadow-sm">
           <Wallet className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> รายการธุรกรรมล่าสุด
         </h4>
+
+        {manualPending.length > 0 && (
+          <div className="space-y-3 mb-6">
+            <h5 className="text-sm font-bold text-amber-400">สถานะระบบสำรอง (แจ้งโอนเงิน)</h5>
+            {manualPending.map((item) => {
+              const isApproved = item.status === 'approved';
+              const isRejected = item.status === 'rejected';
+              
+              return (
+                <div key={item.id} className={`flex items-center justify-between p-3 rounded-xl border backdrop-blur-sm transition-colors ${
+                  isApproved ? 'bg-emerald-900/20 border-emerald-500/30' : 
+                  isRejected ? 'bg-red-900/20 border-red-500/30' : 
+                  'bg-amber-900/20 border-amber-500/30'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg border ${
+                      isApproved ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 
+                      isRejected ? 'bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 
+                      'bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                    }`}>
+                      {isApproved ? <CheckCircle2 className="w-4 h-4" /> : 
+                       isRejected ? <XCircle className="w-4 h-4" /> : 
+                       <Loader2 className="w-4 h-4 animate-spin" />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-bold drop-shadow-sm ${
+                        isApproved ? 'text-emerald-100' : 
+                        isRejected ? 'text-red-100' : 
+                        'text-amber-100'
+                      }`}>
+                        {isApproved ? 'เติมเงินผ่าน promptpay (ช่องทำสำรอง) ยืนยันแล้ว' : 
+                         isRejected ? 'ตรวจสอบสลิปไม่ผ่าน (ถูกปฏิเสธ)' : 
+                         'รอตรวจสอบสลิป'}
+                      </p>
+                      <p className={`text-[10px] uppercase font-bold tracking-widest ${
+                        isApproved ? 'text-emerald-400/80' : 
+                        isRejected ? 'text-red-400/80' : 
+                        'text-amber-400/80'
+                      }`}>
+                        {new Date(item.createdAt).toLocaleString('th-TH')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right whitespace-nowrap">
+                    <p className={`font-bold drop-shadow-sm ${
+                      isApproved ? 'text-emerald-400' : 
+                      isRejected ? 'text-red-400 line-through' : 
+                      'text-amber-400'
+                    }`}>
+                      {isApproved ? `+${item.amount}` : item.amount} ฿
+                    </p>
+                    <p className={`text-[10px] uppercase ${
+                      isApproved ? 'text-emerald-300/70' : 
+                      isRejected ? 'text-red-300/70' : 
+                      'text-amber-300/70'
+                    }`}>
+                      {item.status}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {transactions.length > 0 ? (
           <div className="space-y-3">
             {transactions.map((tx) => (
