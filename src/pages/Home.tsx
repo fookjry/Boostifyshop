@@ -32,8 +32,13 @@ export function Home({ settings }: { settings: any }) {
           <Link to="/login" className="glass-button px-8 py-4 text-lg">
             เริ่มต้นใช้งานตอนนี้
           </Link>
+          {settings?.linkvertiseEnabled !== false && (
+            <Link to="/buy" className="glass-button-orange px-8 py-4 text-lg">
+              ดูโฆษณา รับเวลาใช้งานฟรี
+            </Link>
+          )}
           <Link to="/dashboard" className="glass-panel hover:bg-white/10 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all">
-            ดูการ CONFIG ของฉัน
+            ดู CONFIG ของฉัน
           </Link>
         </motion.div>
       </section>
