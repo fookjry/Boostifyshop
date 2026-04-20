@@ -1489,6 +1489,167 @@ async function startServer() {
     }
   });
 
+  // --- Linkvertise Ad Config API ---
+  app.post("/api/linkvertise/init", authenticate, apiLimiter, async (req: any, res) => {
+    try {
+      const userId = req.user.uid;
+      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress;
+      const { serverId, network } = req.body;
+
+      if (!serverId || !network) return res.status(400).json({ error: "ข้อมูลไม่ครบถ้วน (ต้องการ serverId, network)" });
+
+      // Check User Cooldown (6 hours limit)
+      const userRef = db.collection('users').doc(userId);
+      const userSnap = await userRef.get();
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData?.lastAdClaimAt) {
+          const hoursSince = (Date.now() - new Date(userData.lastAdClaimAt).getTime()) / (1000 * 60 * 60);
+          if (hoursSince < 6) {
+            return res.status(400).json({ error: `คุณเพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
+          }
+        }
+      }
+
+      // Check IP Cooldown (in-memory sort for safety)
+      const qIp = query(collection(dbModular, 'linkvertise_claims'), where('ipAddress', '==', ip));
+      const snapIp = await getDocs(qIp);
+      let latestClaimTime = 0;
+      snapIp.docs.forEach((doc: any) => {
+         const t = new Date(doc.data().claimTime).getTime();
+         if (t > latestClaimTime) latestClaimTime = t;
+      });
+
+      if (latestClaimTime > 0) {
+        const hoursSince = (Date.now() - latestClaimTime) / (1000 * 60 * 60);
+        if (hoursSince < 6) {
+           return res.status(400).json({ error: `เครือข่าย/IP นี้เพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
+        }
+      }
+
+      // Verify Linkvertise URL from admin settings
+      const settingsSnap = await db.collection('settings').doc('global').get();
+      const settingsData = settingsSnap.data();
+      const linkvertiseUrl = settingsData?.linkvertiseUrl;
+      const linkvertiseEnabled = settingsData?.linkvertiseEnabled !== false;
+
+      if (!linkvertiseEnabled) {
+         return res.status(403).json({ error: "ระบบดูโฆษณาปิดปรับปรุงชั่วคราว" });
+      }
+
+      if (!linkvertiseUrl) {
+         return res.status(400).json({ error: "แอดมินยังไม่ได้ตั้งค่าลิงก์ Linkvertise กรุณาติดต่อทีมงาน" });
+      }
+
+      // Create a pending tracking token
+      const token = crypto.randomBytes(16).toString('hex');
+      await db.collection('linkvertise_sessions').doc(token).set({
+        userId,
+        userEmail: req.user.email,
+        ipAddress: ip,
+        serverId,
+        network,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+
+      res.json({ success: true, token, targetUrl: linkvertiseUrl });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/linkvertise/claim", authenticate, apiLimiter, async (req: any, res) => {
+    try {
+      const { token } = req.body;
+      const userId = req.user.uid;
+      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress;
+
+      const sessionRef = db.collection('linkvertise_sessions').doc(token);
+      const sessionSnap = await sessionRef.get();
+
+      if (!sessionSnap.exists() || sessionSnap.data()?.status !== 'pending') {
+        return res.status(400).json({ error: "Session ยืนยันไม่ถูกต้องหรือถูกใช้งานไปแล้ว" });
+      }
+
+      const sessionData = sessionSnap.data();
+
+      // Ensure user is the same
+      if (sessionData.userId !== userId) {
+        return res.status(403).json({ error: "สิทธิ์นี้เป็นของบัญชีผู้ใช้อื่น ไม่สามารถรับได้" });
+      }
+
+      // Network lookup to get inboundId
+      const netsSnap = await db.collection('networks').get();
+      const networkDoc = netsSnap.docs.find((d: any) => d.data()?.name === sessionData.network);
+      if (!networkDoc) return res.status(404).json({ error: "ไม่พบข้อมูลเครือข่าย" });
+      const inboundId = networkDoc.data()?.inboundId;
+
+      // Server lookup
+      const serverRef = db.collection('servers').doc(sessionData.serverId);
+      const serverSnap = await serverRef.get();
+      if (!serverSnap.exists()) return res.status(404).json({ error: "เซิร์ฟเวอร์โดนลบหรือไม่พร้อมใช้งาน" });
+      const serverData = serverSnap.data();
+      const credSnap = await serverRef.collection('private').doc('credentials').get();
+      const creds = credSnap.exists() ? credSnap.data() : null;
+      const fullServer = { ...serverData, id: sessionData.serverId, username: creds?.username, password: creds?.password };
+
+      // Generate 6 hours VPN
+      const days = 0.25; // 6 hours
+      const { uuid, config, expireAt, clientName } = await createVpnConfig(req.user.email || 'ad_user', fullServer, inboundId, days, sessionData.network, 'ad');
+
+      // Update session to claimed
+      await sessionRef.update({ status: 'claimed', claimedAt: new Date().toISOString() });
+
+      const vpnData = {
+        userId,
+        serverId: sessionData.serverId,
+        serverName: serverData.name,
+        inboundId,
+        uuid,
+        config,
+        expireAt,
+        status: "active",
+        network: sessionData.network,
+        deviceCount: 1,
+        clientName,
+        isAdClaim: true,
+        createdAt: new Date().toISOString()
+      };
+
+      // Add VPN
+      await db.collection('vpns').add(vpnData);
+
+      // Add to claims for cooldown tracking
+      await db.collection('linkvertise_claims').add({
+        userId,
+        ipAddress: ip,
+        claimTime: new Date().toISOString(),
+        vpnId: uuid
+      });
+
+      // Update user lastAdClaimAt
+      await db.collection('users').doc(userId).update({
+        lastAdClaimAt: new Date().toISOString()
+      });
+
+      // Log transaction
+      await db.collection('transactions').add({
+        userId: userId,
+        userEmail: req.user.email,
+        amount: 0,
+        type: 'ad_claim',
+        timestamp: new Date().toISOString(),
+        note: `รับ Config ฟรีจากการดูโฆษณา (${sessionData.network})`
+      });
+
+      res.json({ success: true, vpn: vpnData });
+    } catch (err: any) {
+      console.error('Ad Claim error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

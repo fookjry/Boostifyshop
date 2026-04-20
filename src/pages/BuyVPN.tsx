@@ -25,6 +25,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   const [trialSuccess, setTrialSuccess] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [linkvertiseEnabled, setLinkvertiseEnabled] = useState(true);
 
   const canUseTrial = () => {
     if (!profile?.lastTrialAt) return true;
@@ -63,10 +64,17 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
       setVpns(list);
     });
 
+    const unsubGlobal = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+      if (doc.exists()) {
+        setLinkvertiseEnabled(doc.data().linkvertiseEnabled !== false);
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubNetworks();
       unsubVpns();
+      unsubGlobal();
     };
   }, []);
 
@@ -175,6 +183,35 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
         setTimeout(() => {
           navigate('/dashboard');
         }, 2000);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setTrialLoading(false);
+    }
+  };
+
+  const handleAdClaim = async () => {
+    if (!selectedServer || !selectedNetwork) {
+      setError('กรุณาเลือกเซิร์ฟเวอร์และเครือข่ายก่อนรับ Config ฟรี');
+      return;
+    }
+    
+    setTrialLoading(true);
+    setError('');
+
+    try {
+      const token = await user.getIdToken();
+      const response = await axios.post('/api/linkvertise/init', {
+        serverId: selectedServer.id,
+        network: selectedNetwork.name
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        localStorage.setItem('pending_lv_token', response.data.token);
+        window.location.href = response.data.targetUrl;
       }
     } catch (err: any) {
       setError(err.response?.data?.error || err.message);
@@ -486,10 +523,11 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
             <button 
               disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
               onClick={prePurchaseCheck}
-              className="w-full glass-button py-4 text-lg flex items-center justify-center gap-2"
+              className="w-full glass-button py-4 text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-all"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 
                (!selectedServer || !selectedNetwork) ? 'เลือกเซิร์ฟเวอร์และเครือข่าย' :
+               !acceptedTerms ? 'โปรดยอมรับเงื่อนไข' :
                (selectedServer?.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
             </button>
 
@@ -497,10 +535,21 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
               <button 
                 onClick={handleFreeTrial}
                 disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
-                className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4"
+                className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
               >
                 {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : trialSuccess ? <Check className="w-5 h-5" /> : <Gift className="w-5 h-5" />}
                 {trialSuccess ? 'รับสิทธิ์สำเร็จ!' : 'ทดลองใช้ฟรี 1 ชั่วโมง'}
+              </button>
+            )}
+
+            {linkvertiseEnabled && (
+              <button 
+                onClick={handleAdClaim}
+                disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+                className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+              >
+                {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                รับ Config ฟรี 6 ชั่วโมง (ดูโฆษณา)
               </button>
             )}
 

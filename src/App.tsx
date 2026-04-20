@@ -22,6 +22,7 @@ import { TicketsList } from './pages/tickets/TicketsList';
 import { CreateTicket } from './pages/tickets/CreateTicket';
 import { TicketDetail } from './pages/tickets/TicketDetail';
 import { AdminTickets } from './pages/admin/AdminTickets';
+import { UnlockVPN } from './pages/UnlockVPN';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -139,6 +140,7 @@ export default function App() {
                 <Route path="/buy" element={user ? <BuyVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
                 <Route path="/topup" element={user ? <Topup user={user} profile={profile} /> : <Navigate to="/login" />} />
                 <Route path="/tutorial" element={<Tutorial />} />
+                <Route path="/unlock" element={user ? <UnlockVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
                 
                 {/* Tickets Routes */}
                 <Route path="/tickets" element={user ? <TicketsList user={user} /> : <Navigate to="/login" />} />

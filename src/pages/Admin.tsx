@@ -12,6 +12,8 @@ export function Admin() {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [discordInvite, setDiscordInvite] = useState('');
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [linkvertiseUrl, setLinkvertiseUrl] = useState('');
+  const [linkvertiseEnabled, setLinkvertiseEnabled] = useState(true);
   const [siteName, setSiteName] = useState('VPNSaaS');
   const [announcement, setAnnouncement] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -59,6 +61,8 @@ export function Admin() {
         const data = doc.data();
         setDiscordInvite(data.discordInvite || '');
         setDiscordWebhookUrl(data.discordWebhookUrl || '');
+        setLinkvertiseUrl(data.linkvertiseUrl || '');
+        setLinkvertiseEnabled(data.linkvertiseEnabled !== false);
         setSiteName(data.siteName || 'VPNSaaS');
         setAnnouncement(data.announcement || '');
         setLogoUrl(data.logoUrl || '');
@@ -262,31 +266,31 @@ export function Admin() {
 
             <div className="space-y-1">
               <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ลิงก์เชิญ Discord</label>
-              <div className="flex gap-2">
-                <input 
-                  placeholder="https://discord.gg/..." 
-                  value={discordInvite}
-                  onChange={e => setDiscordInvite(e.target.value)}
-                  className="flex-1 bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                />
+              <input 
+                placeholder="https://discord.gg/..." 
+                value={discordInvite}
+                onChange={e => setDiscordInvite(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm flex justify-between items-center">
+                Linkvertise URL (ดูโฆษณารับ config ทันที)
                 <button 
-                  onClick={async () => {
-                    setSavingGlobal(true);
-                    try {
-                      await setDoc(doc(db, 'settings', 'global'), { discordInvite, discordWebhookUrl, siteName, announcement }, { merge: true });
-                    } catch (error) {
-                      handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
-                    } finally {
-                      setSavingGlobal(false);
-                    }
-                  }}
-                  disabled={savingGlobal}
-                  className="bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-slate-500 text-white px-6 rounded-xl font-bold flex items-center gap-2 transition-all border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] backdrop-blur-md"
+                  onClick={() => setLinkvertiseEnabled(!linkvertiseEnabled)}
+                  className={`px-3 py-1 rounded-full text-[9px] font-black transition-all ${linkvertiseEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}
                 >
-                  {savingGlobal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  บันทึก
+                  {linkvertiseEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                 </button>
-              </div>
+              </label>
+              <input 
+                placeholder="https://link-hub.net/xxxx" 
+                value={linkvertiseUrl}
+                onChange={e => setLinkvertiseUrl(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">ตั้งค่าปลายทางของ Linkvertise ไปที่: <span className="text-white font-mono">{window.location.origin}/unlock</span></p>
             </div>
 
             <div className="space-y-1">
@@ -299,6 +303,24 @@ export function Admin() {
               />
               <p className="text-[10px] text-slate-500 mt-1">แจ้งเตือนเมื่อมีลูกค้าเปิด-ปิด Ticket</p>
             </div>
+
+            <button 
+              onClick={async () => {
+                setSavingGlobal(true);
+                try {
+                  await setDoc(doc(db, 'settings', 'global'), { discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement }, { merge: true });
+                } catch (error) {
+                  handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
+                } finally {
+                  setSavingGlobal(false);
+                }
+              }}
+              disabled={savingGlobal}
+              className="w-full mt-6 bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] backdrop-blur-md"
+            >
+              {savingGlobal ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              บันทึกการตั้งค่าทั้งหมด
+            </button>
           </div>
         </section>
 

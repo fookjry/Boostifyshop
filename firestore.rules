@@ -2,22 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Helper functions
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
     
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
     
     function isAdmin() {
-      return isAuthenticated() && 
+      return isSignedIn() && 
         (request.auth.token.email == "jry.fook@gmail.com" || 
          request.auth.token.email == "server@local.host" ||
          request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     // User Profile Rules
@@ -29,14 +50,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && 
-                    isValidUser(request.resource.data) &&
-                    (request.resource.data.role == 'user' || 
-                     (request.resource.data.role == 'admin' && (request.auth.token.email == "jry.fook@gmail.com" || request.auth.token.email == "server@local.host" || request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2"))) && 
-                    request.resource.data.balance == 0;
-      allow update: if isAdmin() || (isOwner(userId) && 
-                    isValidUser(request.resource.data) &&
-                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['balance', 'role']));
+      allow create: if isSignedIn() && isOwner(userId) && 
+                    isValidUser(incoming()) &&
+                    (incoming().role == 'user' || 
+                     (incoming().role == 'admin' && (request.auth.token.email == "jry.fook@gmail.com" || request.auth.token.email == "server@local.host" || request.auth.uid == "JL3epuiyeeSzfek2gQUUIekzndj2"))) && 
+                    incoming().balance == 0;
+      allow update: if (isAdmin() && isValidUser(incoming())) || 
+                    (isOwner(userId) && 
+                     isValidUser(incoming()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['lastTrialAt', 'lastAdClaimAt', 'discordId', 'phoneNumber', 'trueMoneyNumber']));
       allow delete: if isAdmin();
     }
 
@@ -51,7 +73,7 @@ service cloud.firestore {
 
     // Server Rules
     match /servers/{serverId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn() && isValidId(serverId);
       allow write: if isAdmin();
       
       match /private/credentials {
@@ -61,13 +83,13 @@ service cloud.firestore {
 
     // Network Rules
     match /networks/{networkId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() && isValidNetwork(request.resource.data);
+      allow read: if isSignedIn() && isValidId(networkId);
+      allow write: if isAdmin() && isValidNetwork(incoming());
     }
 
     // Device Options Rules
     match /device_options/{optionId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn() && isValidId(optionId);
       allow write: if isAdmin();
     }
 
@@ -78,19 +100,21 @@ service cloud.firestore {
              data.config is string && data.config.size() < 5000 &&
              data.expireAt is string &&
              data.status in ['active', 'expired'] &&
-             data.network in ['AIS', 'TRUE'];
+             data.network is string;
     }
 
     // VPN Config Rules
     match /vpns/{vpnId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create, update: if isAdmin() && isValidVPN(request.resource.data);
+      allow read: if isSignedIn() && isValidId(vpnId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create, update: if isAdmin() && isValidVPN(incoming());
       allow delete: if isAdmin();
     }
 
     // Transaction Rules
     match /transactions/{txId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && isValidId(txId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow create, update, delete: if isAdmin();
     }
 
@@ -101,25 +125,35 @@ service cloud.firestore {
 
     // Manual Topups Rules
     match /manual_topups/{id} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && isValidId(id) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow create, update, delete: if isAdmin();
     }
 
     // Global Settings Rules
     match /settings/{settingId} {
-      allow read: if settingId != 'payment_keys' || isAdmin();
-      allow write: if isAdmin();
+      allow read: if (settingId != 'payment_keys' || isAdmin()) && isValidId(settingId);
+      allow write: if isAdmin() && isValidId(settingId);
     }
 
     // Tickets Rules
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && isValidId(ticketId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow create, update, delete: if isAdmin();
       
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid || isAdmin());
+        allow read: if isSignedIn() && isValidId(messageId) && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid || isAdmin());
         allow create, update, delete: if isAdmin();
       }
+    }
+
+    // Linkvertise Tracking Rules
+    match /linkvertise_sessions/{sessionId} {
+      allow read, write: if isAdmin();
+    }
+    match /linkvertise_claims/{claimId} {
+      allow read, write: if isAdmin();
     }
   }
 }
