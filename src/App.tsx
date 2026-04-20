@@ -5,12 +5,14 @@ import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Navbar } from './components/Navbar';
 import { AnnouncementBar } from './components/AnnouncementBar';
+import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { BuyVPN } from './pages/BuyVPN';
 import { Topup } from './pages/Topup';
 import { Tutorial } from './pages/Tutorial';
+import { Terms } from './pages/Terms';
 import { Admin } from './pages/Admin';
 import { UserManagement } from './pages/admin/UserManagement';
 import { ServerManagement } from './pages/admin/ServerManagement';
@@ -140,6 +142,7 @@ export default function App() {
                 <Route path="/buy" element={user ? <BuyVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
                 <Route path="/topup" element={user ? <Topup user={user} profile={profile} /> : <Navigate to="/login" />} />
                 <Route path="/tutorial" element={<Tutorial />} />
+                <Route path="/terms" element={<Terms />} />
                 <Route path="/unlock" element={user ? <UnlockVPN user={user} profile={profile} /> : <Navigate to="/login" />} />
                 
                 {/* Tickets Routes */}
@@ -158,6 +161,7 @@ export default function App() {
                 <Route path="/admin/tickets" element={profile?.role === 'admin' ? <AdminTickets /> : <Navigate to="/" />} />
               </Routes>
             </main>
+            <Footer settings={settings} />
           </div>
         </div>
       </Router>
