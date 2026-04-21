@@ -547,8 +547,9 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                 <button 
                   onClick={handleAdClaim}
                   disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
-                  className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+                  className="relative w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-[0_0_15px_rgba(245,158,11,0.1)] overflow-hidden"
                 >
+                  <span className="absolute top-0 right-0 bg-amber-500 text-[8px] text-black px-2 py-0.5 rounded-bl-lg font-black tracking-tighter">BETA</span>
                   {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                   รับ Config ฟรี 6 ชั่วโมง (ดูโฆษณา)
                 </button>
