@@ -1451,6 +1451,29 @@ async function startServer() {
     }
   });
 
+  // Reset Ad Claim (Admin Only)
+  app.post("/api/admin/users/:userId/reset-ad-claim", authenticate, adminOnly, async (req: any, res) => {
+    const { userId } = req.params;
+    try {
+      // 1. Update user document
+      await db.collection('users').doc(userId).update({
+        lastAdClaimAt: null
+      });
+
+      // 2. Delete IP claim records for this user to clear IP-based cooldown for them
+      const claimsQ = query(collection(dbModular, 'linkvertise_claims'), where('userId', '==', userId));
+      const claimsSnap = await getDocs(claimsQ);
+      
+      const deletePromises = claimsSnap.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+
+      res.json({ success: true, message: "Reset ad claim cooldown successfully" });
+    } catch (error: any) {
+      console.error("Failed to reset ad claim:", error);
+      res.status(500).json({ error: "ไม่สามารถรีเซ็ตการรับสิทธิ์ได้", details: error.message });
+    }
+  });
+
   // Delete User (Admin Only)
   app.delete("/api/admin/users/:userId", authenticate, adminOnly, async (req: any, res) => {
     const { userId } = req.params;

@@ -92,14 +92,17 @@ export function UserManagement() {
   };
 
   const resetAdClaim = async (userId: string) => {
-    const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        lastAdClaimAt: null
+      const token = await auth.currentUser?.getIdToken();
+      await axios.post(`/api/admin/users/${userId}/reset-ad-claim`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       setEditingUser((prev: any) => ({ ...prev, lastAdClaimAt: null }));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+    } catch (error: any) {
+      console.error("Reset ad claim failed:", error);
+      alert(error.response?.data?.error || "ไม่สามารถรีเซ็ตการรับสิทธิ์ได้");
     }
   };
 
