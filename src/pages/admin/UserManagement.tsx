@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, increment, addDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
-import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History, CreditCard } from 'lucide-react';
+import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History, CreditCard, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 import { Link } from 'react-router-dom';
@@ -86,6 +86,18 @@ export function UserManagement() {
         lastTrialAt: null
       });
       setEditingUser((prev: any) => ({ ...prev, hasUsedTrial: false, lastTrialAt: null }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const resetAdClaim = async (userId: string) => {
+    const path = `users/${userId}`;
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        lastAdClaimAt: null
+      });
+      setEditingUser((prev: any) => ({ ...prev, lastAdClaimAt: null }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -366,11 +378,23 @@ export function UserManagement() {
                     <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2 drop-shadow-sm">สถานะทดลองใช้งาน</p>
                     {editingUser.hasUsedTrial ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 backdrop-blur-sm">
-                        <Activity className="w-3.5 h-3.5" /> ใช้งานแล้ว
+                        <Activity className="w-3.5 h-3.5" /> ใช้งานแล้ว ({new Date(editingUser.lastTrialAt).toLocaleDateString()})
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 backdrop-blur-sm">
                         <CheckCircle2 className="w-3.5 h-3.5" /> ยังไม่ใช้งาน / รีเซ็ตแล้ว
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2 drop-shadow-sm">สิทธิ์ดูโฆษณา (ฟรี 6ชม.)</p>
+                    {editingUser.lastAdClaimAt ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-orange-500/20 text-orange-400 border border-orange-500/30 backdrop-blur-sm">
+                        <Zap className="w-3.5 h-3.5" /> รับแล้ว ({new Date(editingUser.lastAdClaimAt).toLocaleDateString()})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 backdrop-blur-sm">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> พร้อมรับสิทธิ์
                       </span>
                     )}
                   </div>
@@ -439,7 +463,7 @@ export function UserManagement() {
                     className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all group border backdrop-blur-sm ${
                       editingUser.hasUsedTrial 
                         ? 'bg-white/5 border-white/10 hover:border-amber-500/50 cursor-pointer' 
-                        : 'bg-emerald-500/10 border-emerald-500/20 cursor-not-allowed'
+                        : 'bg-emerald-500/10 border-emerald-500/20 cursor-not-allowed opacity-50'
                     }`}
                   >
                     {editingUser.hasUsedTrial ? (
@@ -450,17 +474,48 @@ export function UserManagement() {
                     ) : (
                       <>
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 mb-2 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-                        <span className="text-[10px] font-bold text-emerald-400">พร้อมใช้งานแล้ว</span>
+                        <span className="text-[10px] font-bold text-emerald-400">ทดลองพร้อมใช้</span>
                       </>
                     )}
                   </button>
-                    <button 
-                      onClick={() => setConfirmDeleteUser(editingUser.id)}
-                      className="flex flex-col items-center justify-center p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-red-500/50 transition-all group backdrop-blur-sm"
-                    >
-                      <Trash2 className="w-5 h-5 text-red-400 mb-2 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                      <span className="text-[10px] font-bold text-slate-400">ลบผู้ใช้</span>
-                    </button>
+
+                  <button 
+                    onClick={() => resetAdClaim(editingUser.id)}
+                    disabled={!editingUser.lastAdClaimAt}
+                    className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all group border backdrop-blur-sm ${
+                      editingUser.lastAdClaimAt 
+                        ? 'bg-white/5 border-white/10 hover:border-orange-500/50 cursor-pointer' 
+                        : 'bg-emerald-500/10 border-emerald-500/20 cursor-not-allowed opacity-50'
+                    }`}
+                  >
+                    {editingUser.lastAdClaimAt ? (
+                      <>
+                        <Zap className="w-5 h-5 text-orange-400 mb-2 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
+                        <span className="text-[10px] font-bold text-slate-400">รีเซ็ตสิทธิ์โฆษณา</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 mb-2 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                        <span className="text-[10px] font-bold text-emerald-400">โฆษณาพร้อมใช้</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => handleUpdateUser(editingUser.id, { role: editingUser.role === 'admin' ? 'user' : 'admin' })}
+                    className="flex flex-col items-center justify-center p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-blue-500/50 transition-all group backdrop-blur-sm"
+                  >
+                    <UserCog className="w-5 h-5 text-blue-400 mb-2 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                    <span className="text-[10px] font-bold text-slate-400">เปลี่ยนบทบาท</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setConfirmDeleteUser(editingUser.id)}
+                    className="flex flex-col items-center justify-center p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-red-500/50 transition-all group backdrop-blur-sm"
+                  >
+                    <Trash2 className="w-5 h-5 text-red-400 mb-2 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                    <span className="text-[10px] font-bold text-slate-400">ลบผู้ใช้</span>
+                  </button>
                 </div>
               </div>
             </motion.div>

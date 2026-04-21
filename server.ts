@@ -1493,7 +1493,7 @@ async function startServer() {
   app.post("/api/linkvertise/init", authenticate, apiLimiter, async (req: any, res) => {
     try {
       const userId = req.user.uid;
-      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress;
+      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || 'unknown';
       const { serverId, network } = req.body;
 
       if (!serverId || !network) return res.status(400).json({ error: "ข้อมูลไม่ครบถ้วน (ต้องการ serverId, network)" });
@@ -1545,7 +1545,7 @@ async function startServer() {
       const token = crypto.randomBytes(16).toString('hex');
       await db.collection('linkvertise_sessions').doc(token).set({
         userId,
-        userEmail: req.user.email,
+        userEmail: req.user.email || 'unknown',
         ipAddress: ip,
         serverId,
         network,
@@ -1555,7 +1555,8 @@ async function startServer() {
 
       res.json({ success: true, token, targetUrl: linkvertiseUrl });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error("Linkvertise Init Error:", err);
+      res.status(500).json({ error: err.message || "ไม่สามารถเริ่มการรับสิทธิ์ได้ กรุณาลองใหม่" });
     }
   });
 
@@ -1563,7 +1564,7 @@ async function startServer() {
     try {
       const { token } = req.body;
       const userId = req.user.uid;
-      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress;
+      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || 'unknown';
 
       const sessionRef = db.collection('linkvertise_sessions').doc(token);
       const sessionSnap = await sessionRef.get();

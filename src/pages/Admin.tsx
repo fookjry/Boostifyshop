@@ -149,7 +149,7 @@ export function Admin() {
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', desc: 'ตั้งค่าเซิร์ฟเวอร์และราคา', icon: Server, color: 'amber' },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', desc: 'ตั้งค่าเครือข่ายและ Inbound ID', icon: Wifi, color: 'indigo' },
     { to: '/admin/devices', label: 'จัดการจำนวนอุปกรณ์', desc: 'ตั้งค่าตัวเลือกและราคา', icon: Server, color: 'pink' },
-    { to: '/admin/transactions', label: 'ยืนยันการโอนเงิน', desc: 'ตรวจสอบสลิป', icon: CreditCard, color: 'emerald' },
+    { to: '/admin/transactions', label: 'กิจกรรมล่าสุด', desc: 'ตรวจสอบสลิปและประวัติ', icon: Activity, color: 'emerald' },
     { to: '/admin/tickets', label: 'Support Tickets', desc: 'ตอบกลับปัญหาลูกค้า', icon: MessageSquare, color: 'purple' },
   ];
 
@@ -168,14 +168,30 @@ export function Admin() {
           { label: 'ผู้ใช้ทั้งหมด', value: stats.totalUsers, icon: Users, color: 'blue' },
           { label: 'Config ทั้งหมด', value: stats.activeConfigs, icon: Activity, color: 'purple' },
           { label: 'เซิร์ฟเวอร์', value: stats.serverCount, icon: Server, color: 'amber' },
-          { label: 'บันทึกล่าสุด', value: recentTransactions.length, icon: CreditCard, color: 'emerald' }
-        ].map((s, i) => (
-          <div key={i} className="glass-panel p-4 md:p-6">
-            <s.icon className={`w-6 h-6 md:w-8 md:h-8 text-${s.color}-400 mb-3 md:mb-4 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]`} />
-            <p className="text-[10px] md:text-xs text-slate-400 uppercase font-bold tracking-wider">{s.label}</p>
-            <p className="text-xl md:text-2xl font-bold text-white drop-shadow-sm">{s.value}</p>
-          </div>
-        ))}
+          { label: 'บันทึกล่าสุด', value: recentTransactions.length, icon: CreditCard, color: 'emerald', to: '/admin/transactions' }
+        ].map((s, i) => {
+          const Content = (
+            <>
+              <s.icon className={`w-6 h-6 md:w-8 md:h-8 text-${s.color}-400 mb-3 md:mb-4 drop-shadow-[0_0_8px_rgba(currentColor,0.5)]`} />
+              <p className="text-[10px] md:text-xs text-slate-400 uppercase font-bold tracking-wider">{s.label}</p>
+              <p className="text-xl md:text-2xl font-bold text-white drop-shadow-sm">{s.value}</p>
+            </>
+          );
+
+          if (s.to) {
+            return (
+              <Link key={i} to={s.to} className="glass-panel p-4 md:p-6 hover:bg-white/5 transition-all block group">
+                {Content}
+              </Link>
+            );
+          }
+
+          return (
+            <div key={i} className="glass-panel p-4 md:p-6">
+              {Content}
+            </div>
+          );
+        })}
       </div>
 
       {/* Management Shortcuts */}

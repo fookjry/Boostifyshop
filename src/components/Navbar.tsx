@@ -29,7 +29,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
     { to: '/admin/users', label: 'จัดการผู้ใช้', icon: Users },
     { to: '/admin/servers', label: 'จัดการเซิร์ฟเวอร์', icon: Server },
     { to: '/admin/networks', label: 'จัดการเครือข่าย', icon: Wifi },
-    { to: '/admin/transactions', label: 'รายการธุรกรรม', icon: CreditCard },
+    { to: '/admin/transactions', label: 'กิจกรรมล่าสุด', icon: Activity },
     { to: '/admin/tickets', label: 'Support Tickets', icon: MessageSquare },
   ];
 

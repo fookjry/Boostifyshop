@@ -543,14 +543,19 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
             )}
 
             {linkvertiseEnabled && (
-              <button 
-                onClick={handleAdClaim}
-                disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
-                className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
-              >
-                {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                รับ Config ฟรี 6 ชั่วโมง (ดูโฆษณา)
-              </button>
+              <div className="mt-4 space-y-2">
+                <button 
+                  onClick={handleAdClaim}
+                  disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+                  className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+                >
+                  {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                  รับ Config ฟรี 6 ชั่วโมง (ดูโฆษณา)
+                </button>
+                <p className="text-[10px] text-center text-slate-400 leading-tight">
+                  *สิทธิ์ฟรีนี้จะได้รับเซิร์ฟเวอร์และเครือข่ายที่เลือก แต่จะมีระยะเวลาคงที่ 6 ชม. และใช้งานได้ 1 อุปกรณ์เท่านั้น (ไม่ขึ้นกับตัวเลือกจำนวนวันหรือจำนวนเครื่องด้านบน)
+                </p>
+              </div>
             )}
 
             <p className="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-4">

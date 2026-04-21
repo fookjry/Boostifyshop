@@ -226,9 +226,9 @@ export function Transactions() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3 drop-shadow-md">
-            <CreditCard className="w-7 h-7 md:w-8 md:h-8 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" /> ยืนยันการโอนเงิน
+            <Activity className="w-7 h-7 md:w-8 md:h-8 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" /> กิจกรรมล่าสุด
           </h1>
-          <p className="text-slate-300 text-sm md:text-base">ตรวจสอบและอนุมัติการเติมเงินระบบสำรอง</p>
+          <p className="text-slate-300 text-sm md:text-base">ตรวจสอบกิจกรรมและประวัติธุรกรรมทั้งหมดในระบบ</p>
         </div>
       </header>
 
@@ -308,6 +308,71 @@ export function Transactions() {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2 drop-shadow-sm">
+            <Activity className="w-6 h-6 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> ประวัติธุรกรรมทั้งหมด
+          </h2>
+
+          <div className="glass-panel overflow-hidden">
+            <div className="p-4 border-b border-white/10 flex gap-4">
+              <select 
+                value={filterStatus} 
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition-all"
+              >
+                <option value="all">ทุกประเภท</option>
+                <option value="topup">เติมเงิน</option>
+                <option value="purchase">ซื้อบริการ</option>
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="text-xs uppercase bg-black/40 text-slate-400 border-b border-white/10 font-black tracking-widest">
+                  <tr>
+                    <th className="px-6 py-4">เวลา</th>
+                    <th className="px-6 py-4">ผู้ใช้</th>
+                    <th className="px-6 py-4">ประเภท</th>
+                    <th className="px-6 py-4">หมายเหตุ</th>
+                    <th className="px-6 py-4 text-right">จำนวน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-medium">
+                  {filteredTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic font-bold">ไม่พบประวัติธุรกรรม</td>
+                    </tr>
+                  ) : (
+                    filteredTransactions.map((tx: any) => {
+                      const amount = typeof tx.amount === 'object' ? (tx.amount.amount || 0) : (Number(tx.amount) || 0);
+                      return (
+                        <tr key={tx.id} className="hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-400 text-xs">
+                            {new Date(tx.timestamp).toLocaleString('th-TH')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {tx.userEmail || userMap[tx.userId] || tx.userId}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap uppercase text-[10px]">
+                            <span className={`px-2 py-1 rounded border ${tx.type === 'topup' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
+                              {tx.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap italic text-slate-400">
+                            {tx.note || '-'}
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-right font-bold ${amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {amount >= 0 ? `+${amount}` : amount} ฿
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
