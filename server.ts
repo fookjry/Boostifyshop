@@ -1521,10 +1521,23 @@ async function startServer() {
 
       if (!serverId || !network) return res.status(400).json({ error: "ข้อมูลไม่ครบถ้วน (ต้องการ serverId, network)" });
 
-      // Check User Cooldown (6 hours limit)
+      // Check if user is admin
+      const email = req.user.email;
+      const isDefaultAdmin = (email === "jry.fook@gmail.com");
+      const isServerAdmin = (email === "server@local.host");
+      
+      let isAdmin = isDefaultAdmin || isServerAdmin;
+      if (!isAdmin) {
+        const adminCheckSnap = await db.collection('users').doc(userId).get();
+        if (adminCheckSnap.exists() && adminCheckSnap.data()?.role === 'admin') {
+          isAdmin = true;
+        }
+      }
+
+      // 1. Check User Cooldown (6 hours limit) - Skip for Admin
       const userRef = db.collection('users').doc(userId);
       const userSnap = await userRef.get();
-      if (userSnap.exists()) {
+      if (userSnap.exists() && !isAdmin) {
         const userData = userSnap.data();
         if (userData?.lastAdClaimAt) {
           const hoursSince = (Date.now() - new Date(userData.lastAdClaimAt).getTime()) / (1000 * 60 * 60);
@@ -1534,19 +1547,21 @@ async function startServer() {
         }
       }
 
-      // Check IP Cooldown (in-memory sort for safety)
-      const qIp = query(collection(dbModular, 'linkvertise_claims'), where('ipAddress', '==', ip));
-      const snapIp = await getDocs(qIp);
-      let latestClaimTime = 0;
-      snapIp.docs.forEach((doc: any) => {
-         const t = new Date(doc.data().claimTime).getTime();
-         if (t > latestClaimTime) latestClaimTime = t;
-      });
+      // 2. Check IP Cooldown (6 hours limit) - Skip if IP is unknown or user is Admin
+      if (ip !== 'unknown' && !isAdmin) {
+        const qIp = query(collection(dbModular, 'linkvertise_claims'), where('ipAddress', '==', ip));
+        const snapIp = await getDocs(qIp);
+        let latestClaimTime = 0;
+        snapIp.docs.forEach((doc: any) => {
+           const t = new Date(doc.data().claimTime).getTime();
+           if (t > latestClaimTime) latestClaimTime = t;
+        });
 
-      if (latestClaimTime > 0) {
-        const hoursSince = (Date.now() - latestClaimTime) / (1000 * 60 * 60);
-        if (hoursSince < 6) {
-           return res.status(400).json({ error: `เครือข่าย/IP นี้เพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
+        if (latestClaimTime > 0) {
+          const hoursSince = (Date.now() - latestClaimTime) / (1000 * 60 * 60);
+          if (hoursSince < 6) {
+             return res.status(400).json({ error: `เครือข่าย/IP นี้เพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
+          }
         }
       }
 
