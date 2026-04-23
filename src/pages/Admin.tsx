@@ -22,7 +22,10 @@ export function Admin() {
   const [bankHolder, setBankHolder] = useState('');
   const [minTopup, setMinTopup] = useState(50);
   const [easySlipApiKey, setEasySlipApiKey] = useState('');
+  const [rdcwClientId, setRdcwClientId] = useState('');
+  const [rdcwClientSecret, setRdcwClientSecret] = useState('');
   const [darkxApiKey, setDarkxApiKey] = useState('');
+  const [slipVerifyProvider, setSlipVerifyProvider] = useState<'easyslip' | 'rdcw'>('easyslip');
   const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
@@ -76,6 +79,7 @@ export function Admin() {
         setPaymentQrUrl(data.paymentQrUrl || '');
         setBankHolder(data.bankHolder || '');
         setMinTopup(data.minTopup || 50);
+        setSlipVerifyProvider(data.slipVerifyProvider || 'easyslip');
       }
     });
 
@@ -83,6 +87,8 @@ export function Admin() {
       if (doc.exists()) {
         const data = doc.data();
         setEasySlipApiKey(data.easySlipApiKey || '');
+        setRdcwClientId(data.rdcwClientId || '');
+        setRdcwClientSecret(data.rdcwClientSecret || '');
         setDarkxApiKey(data.darkxApiKey || '');
       }
     });
@@ -380,26 +386,69 @@ export function Admin() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">EasySlip API Key (PromptPay)</label>
-                <input 
-                  type="password"
-                  value={easySlipApiKey}
-                  onChange={e => setEasySlipApiKey(e.target.value)}
-                  placeholder="v1_xxxxxxxxxxxx"
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest block drop-shadow-sm">ระบบเช็คสลิปหลัก</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'easyslip', label: 'EasySlip' },
+                    { id: 'rdcw', label: 'RDCW' }
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSlipVerifyProvider(p.id as any)}
+                      className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${
+                        slipVerifyProvider === p.id 
+                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.2)]' 
+                          : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">DarkX API Key (TrueMoney)</label>
-                <input 
-                  type="password"
-                  value={darkxApiKey}
-                  onChange={e => setDarkxApiKey(e.target.value)}
-                  placeholder="API Key จาก DarkX"
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                />
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">EasySlip API Key</label>
+                  <input 
+                    type="password"
+                    value={easySlipApiKey}
+                    onChange={e => setEasySlipApiKey(e.target.value)}
+                    placeholder="v1_xxxxxxxxxxxx"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">RDCW Client ID</label>
+                  <input 
+                    value={rdcwClientId}
+                    onChange={e => setRdcwClientId(e.target.value)}
+                    placeholder="Client ID จาก RDCW"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">RDCW Client Secret</label>
+                  <input 
+                    type="password"
+                    value={rdcwClientSecret}
+                    onChange={e => setRdcwClientSecret(e.target.value)}
+                    placeholder="Client Secret จาก RDCW"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">DarkX API Key (TrueMoney)</label>
+                  <input 
+                    type="password"
+                    value={darkxApiKey}
+                    onChange={e => setDarkxApiKey(e.target.value)}
+                    placeholder="API Key จาก DarkX"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                  />
+                </div>
               </div>
             </div>
 
@@ -422,11 +471,14 @@ export function Admin() {
                         trueMoneyNumber, 
                         paymentQrUrl, 
                         bankHolder, 
-                        minTopup
+                        minTopup,
+                        slipVerifyProvider
                       }, { merge: true });
                       
                       await setDoc(doc(db, 'settings', 'payment_keys'), {
                         easySlipApiKey,
+                        rdcwClientId,
+                        rdcwClientSecret,
                         darkxApiKey
                       }, { merge: true });
                     } catch (error) {

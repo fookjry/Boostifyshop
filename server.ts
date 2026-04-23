@@ -908,14 +908,20 @@ async function startServer() {
       if (type === 'transfer') {
         const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
         const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
+        const slipVerifyProvider = paymentSettings.slipVerifyProvider || 'easyslip';
         
         const paymentKeysSnap = await db.collection('settings').doc('payment_keys').get();
         const paymentKeys = paymentKeysSnap.exists() ? paymentKeysSnap.data() : {};
         
-        const apiKey = paymentKeys?.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
+        const easySlipKey = paymentKeys?.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
+        const rdcwClientId = paymentKeys?.rdcwClientId || process.env.RDCW_CLIENT_ID;
+        const rdcwClientSecret = paymentKeys?.rdcwClientSecret || process.env.RDCW_CLIENT_SECRET;
 
-        if (!apiKey) {
-          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับตรวจสอบสลิป" });
+        if (slipVerifyProvider === 'easyslip' && !easySlipKey) {
+          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับ EasySlip" });
+        }
+        if (slipVerifyProvider === 'rdcw' && (!rdcwClientId || !rdcwClientSecret)) {
+          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า Client ID หรือ Client Secret สำหรับ RDCW" });
         }
 
         if (!data) {
@@ -926,22 +932,51 @@ async function startServer() {
         const base64Image = data.replace(/^data:image\/\w+;base64,/, "");
 
         try {
-          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', {
-            image: base64Image
-          }, {
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json'
+          let slipData: any = null;
+          let transRef: string = '';
+          let amount: number = 0;
+          let receiverNameTh: string = '';
+          let receiverNameEn: string = '';
+
+          if (slipVerifyProvider === 'easyslip') {
+            const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', {
+              image: base64Image
+            }, {
+              headers: {
+                'Authorization': `Bearer ${easySlipKey}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (verifyRes.data.status === 200 || verifyRes.data.data) {
+              slipData = verifyRes.data.data;
+              amount = slipData.amount?.amount || slipData.amount;
+              transRef = slipData.transRef;
+              receiverNameTh = slipData.receiver?.account?.name?.th || '';
+              receiverNameEn = slipData.receiver?.account?.name?.en || '';
             }
-          });
+          } else if (slipVerifyProvider === 'rdcw') {
+            // RDCW Verification logic
+            const verifyRes = await axios.post('https://api.rdcw.co.th/api/v1/verify', {
+              image: base64Image
+            }, {
+              headers: {
+                'X-Client-Id': rdcwClientId,
+                'X-Client-Secret': rdcwClientSecret,
+                'Content-Type': 'application/json'
+              }
+            });
 
-          if (verifyRes.data.status === 200 || verifyRes.data.data) {
-            const slipData = verifyRes.data.data;
-            const amount = slipData.amount?.amount || slipData.amount;
-            const transRef = slipData.transRef;
-            const receiverNameTh = slipData.receiver?.account?.name?.th || '';
-            const receiverNameEn = slipData.receiver?.account?.name?.en || '';
+            if (verifyRes.data.status === 200 || verifyRes.data.data) {
+              slipData = verifyRes.data.data;
+              amount = slipData.amount?.amount || slipData.amount;
+              transRef = slipData.transRef;
+              receiverNameTh = slipData.receiver?.account?.name?.th || '';
+              receiverNameEn = slipData.receiver?.account?.name?.en || '';
+            }
+          }
 
+          if (slipData) {
             // 1. Minimum amount check
             const minTopup = paymentSettings.minTopup || 50;
             if (amount < minTopup) {
