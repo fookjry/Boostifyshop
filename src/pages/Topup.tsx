@@ -16,30 +16,16 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [manualPending, setManualPending] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Fetch manual topups for user
-    const qManual = query(
-      collection(db, 'manual_topups'), 
-      where('userId', '==', user.uid)
-    );
-    const unsubManual = onSnapshot(qManual, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setManualPending(list.slice(0, 5));
-    });
-
-    return () => {
-      unsubManual();
-    }
-  }, [user.uid]);
+  const [paymentSettings, setPaymentSettings] = useState({ trueMoneyNumber: '', paymentQrUrl: '' });
+  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
+  const [copied, setCopied] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   const validateLink = (link: string) => {
     if (!link) {
       setIsValid(null);
       return;
     }
-    // TrueMoney Angpao link pattern
     const pattern = /^https:\/\/gift\.truemoney\.com\/campaign\/\?v=[a-zA-Z0-9]+$/;
     setIsValid(pattern.test(link));
   };
@@ -49,53 +35,36 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
       validateLink(giftLink);
     }
   }, [giftLink, method]);
-  const [paymentSettings, setPaymentSettings] = useState({ trueMoneyNumber: '', paymentQrUrl: '' });
-  const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
-  const [copied, setCopied] = useState(false);
 
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const fetchData = async () => {
+    try {
+      const [manualRes, settingsRes, methodsRes, txRes] = await Promise.all([
+        axios.get('/api/my-manual-topups'),
+        axios.get('/api/settings/payment'),
+        axios.get('/api/payment-methods'),
+        axios.get('/api/my-transactions')
+      ]);
+      setManualPending(manualRes.data);
+      setPaymentSettings({
+        trueMoneyNumber: settingsRes.data.trueMoneyNumber || '',
+        paymentQrUrl: settingsRes.data.paymentQrUrl || ''
+      });
+      setPaymentMethods({
+        promptpay: methodsRes.data.promptpay || 'open',
+        truemoney: methodsRes.data.truemoney || 'open',
+        manual: methodsRes.data.manual || 'open'
+      });
+      setTransactions(txRes.data);
+    } catch (err) {
+      console.error('Failed to fetch topup data:', err);
+    }
+  };
 
   useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'payment'), (doc) => {
-      if (doc.exists()) {
-        setPaymentSettings({
-          trueMoneyNumber: doc.data().trueMoneyNumber || '',
-          paymentQrUrl: doc.data().paymentQrUrl || ''
-        });
-      }
-    });
-
-    const unsubMethods = onSnapshot(doc(db, 'settings', 'payment_methods'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setPaymentMethods({
-          promptpay: data.promptpay || 'open',
-          truemoney: data.truemoney || 'open',
-          manual: data.manual || 'open'
-        });
-      }
-    });
-
-    // Fetch user transactions
-    const q = query(
-      collection(db, 'transactions'), 
-      where('userId', '==', user.uid)
-    );
-    const unsubTx = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Sort in memory to avoid composite index requirement
-      list.sort((a: any, b: any) => {
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
-      setTransactions(list.slice(0, 10));
-    });
-
-    return () => {
-      unsubSettings();
-      unsubMethods();
-      unsubTx();
-    };
-  }, [user.uid]);
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

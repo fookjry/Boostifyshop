@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import axios from 'axios';
 import { Wifi, Plus, Trash2, Power, Edit, Loader2, Save, X, Hash } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 
 const COLORS = [
   { name: 'Emerald', value: 'emerald' },
@@ -108,61 +106,65 @@ export function NetworkManagement() {
 
   const [newNetwork, setNewNetwork] = useState(initialNetworkState);
 
-  useEffect(() => {
-    const path = 'networks';
-    const unsub = onSnapshot(collection(db, path), (snap) => {
-      setNetworks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchNetworks = async () => {
+    try {
+      const response = await axios.get('/api/admin/networks');
+      setNetworks(response.data);
+    } catch (error) {
+      console.error('Failed to fetch networks', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
+    }
+  };
 
-    return () => unsub();
+  useEffect(() => {
+    fetchNetworks();
   }, []);
 
   const handleAddNetwork = async (e: React.FormEvent) => {
     e.preventDefault();
-    const path = 'networks';
     try {
-      await addDoc(collection(db, path), { ...newNetwork, status: 'open' });
+      await axios.post('/api/admin/networks', { ...newNetwork, status: 'open' });
       setNewNetwork(initialNetworkState);
       setShowAddModal(false);
+      fetchNetworks();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      console.error('Failed to create network', error);
     }
   };
 
   const handleUpdateNetwork = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingNetwork) return;
-    const path = `networks/${editingNetwork.id}`;
     try {
       const { id, ...data } = editingNetwork;
-      await updateDoc(doc(db, 'networks', id), data);
+      await axios.put(`/api/admin/networks/${id}`, data);
       setEditingNetwork(null);
+      fetchNetworks();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Failed to update network', error);
     }
   };
 
-  const toggleNetwork = async (id: string, currentStatus: string) => {
-    const path = `networks/${id}`;
+  const toggleNetwork = async (network: any) => {
     try {
-      await updateDoc(doc(db, 'networks', id), {
-        status: currentStatus === 'open' ? 'closed' : 'open'
+      await axios.put(`/api/admin/networks/${network.id}`, {
+        ...network,
+        status: network.status === 'open' ? 'closed' : 'open'
       });
+      fetchNetworks();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Failed to toggle network', error);
     }
   };
 
   const deleteNetwork = async (id: string) => {
-    const path = `networks/${id}`;
     try {
-      await deleteDoc(doc(db, 'networks', id));
+      await axios.delete(`/api/admin/networks/${id}`);
       setConfirmDelete(null);
+      fetchNetworks();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      console.error('Failed to delete network', error);
     }
   };
 
@@ -231,7 +233,7 @@ export function NetworkManagement() {
                     <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   </button>
                   <button 
-                    onClick={() => toggleNetwork(n.id, n.status)}
+                    onClick={() => toggleNetwork(n)}
                     className={`p-2 rounded-lg transition-colors border backdrop-blur-sm ${n.status === 'open' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'}`}
                   >
                     <Power className="w-3.5 h-3.5 md:w-4 md:h-4" />

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase';
+import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { MessageSquare, Search, Clock, CheckCircle2, AlertCircle, Filter } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -11,13 +10,21 @@ export function AdminTickets() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    const q = query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchTickets = async () => {
+    try {
+      const response = await axios.get('/api/admin/tickets');
+      setTickets(response.data);
+    } catch (error) {
+      console.error('Failed to fetch admin tickets', error);
+    } finally {
       setLoading(false);
-    });
-    return () => unsub();
+    }
+  };
+
+  useEffect(() => {
+    fetchTickets();
+    const interval = setInterval(fetchTickets, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredTickets = tickets.filter(t => {

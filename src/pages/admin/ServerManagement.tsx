@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, deleteField } from 'firebase/firestore';
-import { db } from '../../firebase';
+import axios from 'axios';
 import { Server, Plus, Trash2, Power, Settings, Edit, Loader2, Save, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 
 const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
   const [uploadingCategory, setUploadingCategory] = useState<{ field: string, index: number } | null>(null);
@@ -249,72 +247,96 @@ export function ServerManagement() {
 
   const [newServer, setNewServer] = useState(initialServerState);
 
-  useEffect(() => {
-    const path = 'servers';
-    const unsub = onSnapshot(collection(db, path), (snap) => {
-      setServers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchServers = async () => {
+    try {
+      const response = await axios.get('/api/admin/servers');
+      // Format supportedAppIcons / generalUsageIcons which are saved as JSON strings
+      const parsedData = response.data.map((s: any) => ({
+        ...s,
+        supportedAppIcons: s.supportedAppIcons ? JSON.parse(s.supportedAppIcons) : [],
+        generalUsageIcons: s.generalUsageIcons ? JSON.parse(s.generalUsageIcons) : []
+      }));
+      setServers(parsedData);
+    } catch (error) {
+      console.error('Failed to fetch servers', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
+    }
+  };
 
-    const unsubVpns = onSnapshot(collection(db, 'vpns'), (snap) => {
+  const fetchVpns = async () => {
+    try {
+      const response = await axios.get('/api/admin/vpns');
       const now = new Date();
-      setVpns(snap.docs.map(d => d.data()).filter(v => new Date(v.expireAt) > now));
-    });
+      setVpns(response.data.filter((v: any) => new Date(v.expireAt) > now));
+    } catch (error) {
+      console.error('Failed to fetch VPNs', error);
+    }
+  };
 
-    return () => {
-      unsub();
-      unsubVpns();
-    };
+  useEffect(() => {
+    fetchServers();
+    fetchVpns();
   }, []);
 
   const handleAddServer = async (e: React.FormEvent) => {
     e.preventDefault();
-    const path = 'servers';
     try {
-      const { username, password, ...publicData } = newServer;
-      const docRef = await addDoc(collection(db, path), { ...publicData, status: 'online' });
-      await setDoc(doc(db, `servers/${docRef.id}/private`, 'credentials'), { username, password });
+      // Stringify icons before sending
+      const serverPayload = {
+        ...newServer,
+        supportedAppIcons: JSON.stringify(newServer.supportedAppIcons || []),
+        generalUsageIcons: JSON.stringify(newServer.generalUsageIcons || []),
+        status: 'online'
+      };
+      await axios.post('/api/admin/servers', serverPayload);
       setNewServer(initialServerState);
       setShowAddModal(false);
+      fetchServers();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      console.error('Failed to create server', error);
     }
   };
 
   const handleUpdateServer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingServer) return;
-    const path = `servers/${editingServer.id}`;
     try {
-      const { id, username, password, ...publicData } = editingServer;
-      await updateDoc(doc(db, 'servers', id), publicData);
-      await setDoc(doc(db, `servers/${id}/private`, 'credentials'), { username, password }, { merge: true });
+      const { id, ...data } = editingServer;
+      const serverPayload = {
+        ...data,
+        supportedAppIcons: JSON.stringify(data.supportedAppIcons || []),
+        generalUsageIcons: JSON.stringify(data.generalUsageIcons || []),
+      };
+      await axios.put(`/api/admin/servers/${id}`, serverPayload);
       setEditingServer(null);
+      fetchServers();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Failed to update server', error);
     }
   };
 
-  const toggleServer = async (id: string, currentStatus: string) => {
-    const path = `servers/${id}`;
+  const toggleServer = async (server: any) => {
     try {
-      await updateDoc(doc(db, 'servers', id), {
-        status: currentStatus === 'online' ? 'offline' : 'online'
+      await axios.put(`/api/admin/servers/${server.id}`, {
+        ...server,
+        status: server.status === 'online' ? 'offline' : 'online',
+        supportedAppIcons: JSON.stringify(server.supportedAppIcons || []),
+        generalUsageIcons: JSON.stringify(server.generalUsageIcons || []),
       });
+      fetchServers();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Failed to toggle server', error);
     }
   };
 
   const deleteServer = async (id: string) => {
-    const path = `servers/${id}`;
     try {
-      await deleteDoc(doc(db, 'servers', id));
+      await axios.delete(`/api/admin/servers/${id}`);
       setConfirmDelete(null);
+      fetchServers();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      console.error('Failed to delete server', error);
     }
   };
 
@@ -342,13 +364,12 @@ export function ServerManagement() {
               <button 
                 onClick={async () => {
                   try {
-                    const credSnap = await getDoc(doc(db, `servers/${s.id}/private`, 'credentials'));
-                    const creds = credSnap.exists() ? credSnap.data() : { username: '', password: '' };
+                    // Fetch complete server details including credentials gracefully
+                    const res = await axios.get('/api/admin/servers');
+                    const fullServer = res.data.find((x: any) => x.id === s.id) || s;
                     setEditingServer({
-                      ...s,
-                      username: creds.username || '',
-                      password: creds.password || '',
-                      prices: s.prices || initialServerState.prices
+                      ...fullServer,
+                      prices: fullServer.prices || initialServerState.prices
                     });
                   } catch (error) {
                     console.error("Failed to load credentials", error);
@@ -365,7 +386,7 @@ export function ServerManagement() {
                 <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
               </button>
               <button 
-                onClick={() => toggleServer(s.id, s.status)}
+                onClick={() => toggleServer(s)}
                 className={`p-2 rounded-lg transition-colors border backdrop-blur-sm ${s.status === 'online' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'}`}
               >
                 <Power className="w-3.5 h-3.5 md:w-4 md:h-4" />

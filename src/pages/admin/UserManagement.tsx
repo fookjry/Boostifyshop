@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, increment, addDoc, query, where, deleteDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebase';
 import { Users, Search, Wallet, Plus, Trash2, ShieldAlert, Loader2, Settings, MoreVertical, UserCog, Key, Shield, Ban, CheckCircle2, Activity, Server, Filter, History, CreditCard, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { auth } from '../../firebase';
 
 export function UserManagement() {
   const [users, setUsers] = useState<any[]>([]);
@@ -20,15 +18,23 @@ export function UserManagement() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [savingUser, setSavingUser] = useState(false);
 
-  useEffect(() => {
-    const path = 'users';
-    const unsub = onSnapshot(collection(db, path), (snap) => {
-      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get('/api/admin/users');
+      // Format id properly from uid
+      setUsers(response.data.map((u: any) => ({ ...u, id: u.uid })));
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
-    return () => unsub();
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    // Refresh interval
+    const interval = setInterval(fetchUsers, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredUsers = users.filter(u => {
@@ -40,54 +46,49 @@ export function UserManagement() {
   const handleAddBalance = async () => {
     if (!showConfirm) return;
     const { userId, amount } = showConfirm;
-    const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        balance: increment(amount)
-      });
-      await addDoc(collection(db, 'transactions'), {
-        userId,
-        amount: amount,
-        type: 'topup',
-        timestamp: new Date().toISOString(),
-        note: `แอดมินปรับยอดเงินด้วยตนเอง (${amount > 0 ? '+' : ''}${amount})`
-      });
+      await axios.post(`/api/admin/users/${userId}/balance`, { amount });
+      
+      // Update local state optimistic
+      setUsers(users.map(u => u.id === userId ? { ...u, balance: (u.balance || 0) + amount } : u));
+      
       setShowConfirm(null);
       setAmounts(prev => ({ ...prev, [userId]: '' }));
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Add balance failed:', error);
+      alert('Failed to add balance');
     }
   };
 
-  const viewUserVpns = (userId: string, email: string) => {
-    const q = query(collection(db, 'vpns'), where('userId', '==', userId));
-    onSnapshot(q, (snap) => {
-      setUserVpns(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  const viewUserVpns = async (userId: string, email: string) => {
+    try {
+      const response = await axios.get(`/api/admin/users/${userId}/vpns`);
+      setUserVpns(response.data);
       setViewingUser({ id: userId, email });
-    });
+    } catch (error) {
+      console.error('Fetch user VPNs failed:', error);
+    }
   };
 
   const deleteVpn = async (vpnId: string) => {
-    const path = `vpns/${vpnId}`;
     try {
-      await deleteDoc(doc(db, 'vpns', vpnId));
+      await axios.delete(`/api/admin/vpns/${vpnId}`);
       setUserVpns(prev => prev.filter(v => v.id !== vpnId));
       setConfirmDeleteVpn(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      console.error('Delete VPN failed:', error);
+      alert('Failed to delete VPN');
     }
   };
 
   const resetTrial = async (userId: string) => {
-    const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        hasUsedTrial: false,
-        lastTrialAt: null
-      });
+      await axios.put(`/api/admin/users/${userId}`, { hasUsedTrial: false, lastTrialAt: null });
       setEditingUser((prev: any) => ({ ...prev, hasUsedTrial: false, lastTrialAt: null }));
+      setUsers(users.map(u => u.id === userId ? { ...u, hasUsedTrial: false, lastTrialAt: null } : u));
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Reset trial failed:', error);
+      alert('Failed to reset trial');
     }
   };
 
@@ -108,12 +109,14 @@ export function UserManagement() {
 
   const handleUpdateUser = async (userId: string, data: any) => {
     setSavingUser(true);
-    const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), data);
-      setEditingUser(null);
+      await axios.put(`/api/admin/users/${userId}`, data);
+      const updatedUser = { ...editingUser, ...data };
+      setEditingUser(updatedUser);
+      setUsers(users.map(u => u.id === userId ? { ...u, ...data } : u));
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Update user failed:', error);
+      alert('Failed to update user');
     } finally {
       setSavingUser(false);
     }

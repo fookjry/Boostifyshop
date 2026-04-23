@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc, deleteField } from 'firebase/firestore';
-import { db } from '../../firebase';
+import axios from 'axios';
 import { Image as ImageIcon, Upload, Trash2, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 
 const IconCard = ({ icon, uploadingId, handleUpload, handleDelete }: any) => (
   <div className="glass-panel p-5 flex flex-col items-center text-center space-y-4 group relative overflow-hidden">
@@ -56,27 +54,30 @@ export function AppIconManager() {
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'app_icons'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const iconList = [];
-        // IDs 1-6 only
-        for (let i = 1; i <= 6; i++) {
-          iconList.push({
-            id: i,
-            url: data[i] || null
-          });
-        }
-        setIcons(iconList);
-      } else {
-        const initialIcons = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, url: null }));
-        setIcons(initialIcons);
+  const fetchIcons = async () => {
+    try {
+      const response = await axios.get('/api/settings/app_icons');
+      const data = response.data;
+      const iconList = [];
+      // IDs 1-6 only
+      for (let i = 1; i <= 6; i++) {
+        iconList.push({
+          id: i,
+          url: data[i] || null
+        });
       }
+      setIcons(iconList);
+    } catch (error) {
+      console.error('Failed to fetch icons', error);
+      const initialIcons = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, url: null }));
+      setIcons(initialIcons);
+    } finally {
       setLoading(false);
-    });
+    }
+  };
 
-    return () => unsub();
+  useEffect(() => {
+    fetchIcons();
   }, []);
 
   const handleUpload = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,13 +97,16 @@ export function AppIconManager() {
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         
-        // Update Firestore directly with base64 string
-        await setDoc(doc(db, 'settings', 'app_icons'), {
-          [id]: base64String
-        }, { merge: true });
+        // Fetch current settings, merge, and save
+        const response = await axios.get('/api/settings/app_icons');
+        const currentData = response.data;
+        currentData[id] = base64String;
+
+        await axios.post('/api/admin/settings/app_icons', currentData);
         
         console.log(`Icon ${id} uploaded as Base64 successfully`);
         setUploadingId(null);
+        fetchIcons();
       };
       reader.onerror = (error) => {
         console.error('FileReader error:', error);
@@ -122,10 +126,13 @@ export function AppIconManager() {
     if (!window.confirm(`ยืนยันการลบรูปภาพที่ ${id}?`)) return;
 
     try {
-      await updateDoc(doc(db, 'settings', 'app_icons'), {
-        [id]: deleteField()
-      });
-      console.log(`Icon ${id} deleted from Firestore`);
+      const response = await axios.get('/api/settings/app_icons');
+      const currentData = response.data;
+      delete currentData[id];
+      await axios.post('/api/admin/settings/app_icons', currentData);
+
+      console.log(`Icon ${id} deleted`);
+      fetchIcons();
     } catch (error) {
       console.error('Delete failed:', error);
       alert('ลบล้มเหลว กรุณาลองใหม่อีกครั้ง');

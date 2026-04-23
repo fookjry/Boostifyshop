@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth } from './firebase';
 import { Navbar } from './components/Navbar';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { Footer } from './components/Footer';
@@ -27,8 +26,7 @@ import { AdminTickets } from './pages/admin/AdminTickets';
 import { UnlockVPN } from './pages/UnlockVPN';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-
-import { handleFirestoreError, OperationType } from './lib/firestore-errors';
+import axios from 'axios';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,80 +34,65 @@ export default function App() {
   const [settings, setSettings] = useState<any>({ siteName: 'VPNSaaS', logoUrl: '' });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setSettings(data);
-        
-        // Update document title
-        if (data.siteName) {
-          document.title = data.siteName;
-        }
-        
-        // Update favicon
-        if (data.logoUrl) {
-          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-          if (!link) {
-            link = document.createElement('link');
-            link.rel = 'icon';
-            document.getElementsByTagName('head')[0].appendChild(link);
-          }
-          link.href = data.logoUrl;
-        }
+  const fetchGlobalSettings = async () => {
+    try {
+      const res = await axios.get('/api/settings/global');
+      const data = res.data;
+      setSettings(data);
+      
+      if (data.siteName) {
+        document.title = data.siteName;
       }
-    });
+      
+      if (data.logoUrl) {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.href = data.logoUrl;
+      }
+    } catch (err) {
+      console.error('Failed to fetch global settings:', err);
+    }
+  };
 
-    let profileUnsub: (() => void) | null = null;
+  const fetchProfile = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await axios.get('/api/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setProfile(res.data);
+    } catch (err: any) {
+      console.error('Failed to fetch profile details:', err.response?.data || err.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalSettings();
+    const settingsInterval = setInterval(fetchGlobalSettings, 60000); // Refresh settings every minute
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      // Clean up previous profile listener if it exists
-      if (profileUnsub) {
-        profileUnsub();
-        profileUnsub = null;
-      }
-
       setUser(u);
       if (u) {
-        const userDoc = doc(db, 'users', u.uid);
-        try {
-          const snap = await getDoc(userDoc);
-          if (!snap.exists()) {
-            const newProfile = {
-              email: u.email,
-              balance: 0,
-              role: u.email === 'jry.fook@gmail.com' ? 'admin' : 'user',
-              createdAt: new Date().toISOString()
-            };
-            try {
-              await setDoc(userDoc, newProfile);
-              setProfile(newProfile);
-            } catch (error) {
-              handleFirestoreError(error, OperationType.WRITE, `users/${u.uid}`);
-            }
-          } else {
-            profileUnsub = onSnapshot(userDoc, (doc) => {
-              setProfile(doc.data());
-            }, (error) => {
-              // Only report error if we are still authenticated as this user
-              if (auth.currentUser?.uid === u.uid) {
-                handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
-              }
-            });
-          }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
-        }
+        await fetchProfile();
       } else {
         setProfile(null);
       }
       setLoading(false);
     });
 
+    const profileInterval = setInterval(() => {
+      if (auth.currentUser) fetchProfile();
+    }, 30000);
+
     return () => {
       unsubscribe();
-      unsubSettings();
-      if (profileUnsub) profileUnsub();
+      clearInterval(settingsInterval);
+      clearInterval(profileInterval);
     };
   }, []);
 
@@ -132,7 +115,7 @@ export default function App() {
           </div>
 
           <div className="relative z-10 flex flex-col min-h-screen">
-            <AnnouncementBar />
+            <AnnouncementBar settings={settings} />
             <Navbar user={user} profile={profile} settings={settings} />
             <main className="container mx-auto px-4 py-8 pb-24 md:pb-8 flex-1">
               <Routes>

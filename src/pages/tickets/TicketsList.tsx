@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase';
+import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { MessageSquare, Plus, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -9,20 +8,22 @@ export function TicketsList({ user }: { user: any }) {
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchTickets = async () => {
+    try {
+      const { data } = await axios.get('/api/my-tickets');
+      setTickets(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch tickets:', error);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
-    const q = query(
-      collection(db, 'tickets'), 
-      where('userId', '==', user.uid),
-      orderBy('updatedAt', 'desc')
-    );
-    
-    const unsub = onSnapshot(q, (snap) => {
-      setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    });
-
-    return () => unsub();
+    fetchTickets();
+    const interval = setInterval(fetchTickets, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const getStatusBadge = (status: string) => {
@@ -72,7 +73,7 @@ export function TicketsList({ user }: { user: any }) {
                   className="bg-black/20 hover:bg-white/5 border border-white/10 hover:border-blue-500/30 p-4 rounded-xl transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
                 >
                   <div className="space-y-1">
-                    <h3 className="font-bold text-white text-lg group-hover:text-blue-400 transition-colors drop-shadow-sm">{ticket.title}</h3>
+                    <h3 className="font-bold text-white text-lg group-hover:text-blue-400 transition-colors drop-shadow-sm">{ticket.subject}</h3>
                     <p className="text-xs text-slate-400 font-mono">
                       Ticket #{ticket.id.slice(0, 8).toUpperCase()} • อัปเดตล่าสุด {new Date(ticket.updatedAt).toLocaleString('th-TH')}
                     </p>

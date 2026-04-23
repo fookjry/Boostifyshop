@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import axios from 'axios';
 import { Shield, Plus, Edit2, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export function AdminDeviceOptions() {
   const [options, setOptions] = useState<any[]>([]);
@@ -20,17 +18,19 @@ export function AdminDeviceOptions() {
     sortOrder: 0
   });
 
-  useEffect(() => {
-    const q = query(collection(db, 'device_options'), orderBy('sortOrder', 'asc'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setOptions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchOptions = async () => {
+    try {
+      const response = await axios.get('/api/admin/device-options');
+      setOptions(response.data);
+    } catch (error) {
+      console.error('Failed to fetch device options', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'device_options');
-      setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchOptions();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -40,26 +40,24 @@ export function AdminDeviceOptions() {
 
     try {
       const dataToSave = {
+        name: formData.count === 1 ? 'เริ่มต้น (1 เครื่อง)' : `แชร์ครอบครัว (${formData.count} เครื่อง)`, // Optional logical naming
         count: Number(formData.count),
         price: Number(formData.price),
         status: formData.status,
-        sortOrder: Number(formData.sortOrder),
-        updatedAt: new Date().toISOString()
+        sortOrder: Number(formData.sortOrder)
       };
 
       if (editingOption) {
-        await updateDoc(doc(db, 'device_options', editingOption.id), dataToSave);
+        await axios.put(`/api/admin/device-options/${editingOption.id}`, dataToSave);
       } else {
-        await addDoc(collection(db, 'device_options'), {
-          ...dataToSave,
-          createdAt: new Date().toISOString()
-        });
+        await axios.post('/api/admin/device-options', dataToSave);
       }
 
       setShowModal(false);
       setEditingOption(null);
+      fetchOptions();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message);
     } finally {
       setSaving(false);
     }
@@ -68,7 +66,8 @@ export function AdminDeviceOptions() {
   const handleDelete = async (id: string) => {
     if (!window.confirm('คุณแน่ใจหรือไม่ที่จะลบตัวเลือกนี้?')) return;
     try {
-      await deleteDoc(doc(db, 'device_options', id));
+      await axios.delete(`/api/admin/device-options/${id}`);
+      fetchOptions();
     } catch (err: any) {
       alert(err.message);
     }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { LogOut, User as UserIcon, Wallet, ShieldCheck, LayoutDashboard, ChevronDown, Users, CreditCard, Server, Activity, BookOpen, Wifi, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import axios from 'axios';
+
 
 export function Navbar({ user, profile, settings }: { user: any; profile: any; settings: any }) {
   const navigate = useNavigate();
@@ -13,11 +14,20 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
 
   useEffect(() => {
     if (user && profile?.role === 'admin') {
-      const q = query(collection(db, 'manual_topups'), where('status', '==', 'pending'));
-      const unsub = onSnapshot(q, (snap) => setPendingTopups(snap.size));
-      return () => unsub();
+      const fetchPending = async () => {
+        try {
+          const res = await axios.get('/api/admin/topup/manual/pending');
+          setPendingTopups(res.data.length);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      fetchPending();
+      const interval = setInterval(fetchPending, 30000);
+      return () => clearInterval(interval);
     }
   }, [user, profile?.role]);
+
 
   const handleLogout = async () => {
     await auth.signOut();

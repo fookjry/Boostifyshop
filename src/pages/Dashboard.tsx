@@ -21,27 +21,27 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        setDiscordInvite(doc.data().discordInvite || '');
-      }
-    });
-
-    const path = 'vpns';
-    const q = query(collection(db, path), where('userId', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVpns(list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  const fetchData = async () => {
+    try {
+      const [vpnsRes, settingsRes] = await Promise.all([
+        axios.get('/api/my-vpns').catch(err => ({ data: [] })),
+        axios.get('/api/settings/global').catch(err => ({ data: {} }))
+      ]);
+      setVpns(Array.isArray(vpnsRes.data) ? vpnsRes.data : []);
+      setDiscordInvite(settingsRes.data.discordInvite || '');
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
-    return () => {
-      unsubscribe();
-      unsubSettings();
-    };
-  }, [user.uid]);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // Refresh interval every 30 seconds if we want "sort of" real-time
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const allFilteredVpns = vpns.filter(v => {
     const expireDate = new Date(v.expireAt);

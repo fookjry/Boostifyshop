@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../firebase';
 import { CreditCard, TrendingUp, TrendingDown, Activity, DollarSign, Settings, Save, Loader2, Upload, Trash2, User, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
-import { doc, setDoc, getDoc, limitToLast } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../../lib/firestore-errors';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { auth } from '../../firebase';
@@ -31,20 +27,36 @@ export function Transactions() {
   const [actionModal, setActionModal] = useState<{ type: 'approve' | 'reject', id: string, amount?: number } | null>(null);
   const [rejectReason, setRejectReason] = useState('ยอดเงินไม่ถูกต้อง / สลิปไม่ถูกต้อง');
 
-  useEffect(() => {
-    // Other query logic
-    const txPath = 'transactions';
-    const q = query(collection(db, txPath), orderBy('timestamp', 'desc'), limit(500));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      
-      // If userIdFilter is present, we still fetch all but filter in memory for stats/charts 
-      // or we could query specifically. For simplicity with existing code, we filter here.
-      const filteredList = userIdFilter ? list.filter(tx => tx.userId === userIdFilter) : list;
-      
-      setTransactions(list);
+  const fetchData = async () => {
+    try {
+      const [txRes, settingsRes, keysRes, methodsRes, usersRes, manualRes] = await Promise.all([
+        axios.get('/api/admin/transactions'),
+        axios.get('/api/admin/settings/payment'),
+        axios.get('/api/admin/settings/payment_keys'),
+        axios.get('/api/admin/settings/payment_methods'),
+        axios.get('/api/admin/users/mapping'),
+        axios.get('/api/admin/manual-topups')
+      ]);
 
-      // Aggregate stats based on filtered list
+      const list = txRes.data;
+      const filteredList = userIdFilter ? list.filter((tx: any) => tx.userId === userIdFilter) : list;
+      setTransactions(list);
+      setUserMap(usersRes.data);
+      setManualTopups(manualRes.data);
+
+      const pS = settingsRes.data;
+      const pK = keysRes.data;
+      setPaymentSettings({
+        trueMoneyNumber: pS.trueMoneyNumber || '',
+        paymentQrUrl: pS.paymentQrUrl || '',
+        bankHolder: pS.bankHolder || '',
+        minTopup: pS.minTopup || 50,
+        easySlipApiKey: pK.easySlipApiKey || '',
+        darkxApiKey: pK.darkxApiKey || ''
+      });
+      setPaymentMethods(methodsRes.data);
+
+      // Aggregate stats
       let topup = 0;
       let purchase = 0;
       let promptpayCount = 0;
@@ -52,7 +64,7 @@ export function Transactions() {
       const userSpending: { [key: string]: { email: string, amount: number } } = {};
 
       filteredList.forEach((tx: any) => {
-        const amount = typeof tx.amount === 'object' ? (tx.amount.amount || 0) : (Number(tx.amount) || 0);
+        const amount = Number(tx.amount) || 0;
         const absAmount = Math.abs(amount);
         
         if (tx.type === 'topup') {
@@ -63,7 +75,7 @@ export function Transactions() {
         if (tx.type === 'purchase') {
           purchase += absAmount;
           const uId = tx.userId;
-          if (!userSpending[uId]) userSpending[uId] = { email: tx.userEmail || 'Unknown', amount: 0 };
+          if (!userSpending[uId]) userSpending[uId] = { email: tx.userEmail || usersRes.data[uId] || 'Unknown', amount: 0 };
           userSpending[uId].amount += absAmount;
         }
       });
@@ -80,85 +92,34 @@ export function Transactions() {
         .slice(0, 5);
       setTopUsers(topUsersList);
 
-      // Aggregate chart data (by date) based on filtered list
       const dailyData: { [key: string]: { date: string, topup: number, purchase: number } } = {};
       filteredList.forEach((tx: any) => {
-        const amount = typeof tx.amount === 'object' ? (tx.amount.amount || 0) : (Number(tx.amount) || 0);
+        const amount = Number(tx.amount) || 0;
         const date = new Date(tx.timestamp).toLocaleDateString();
         if (!dailyData[date]) dailyData[date] = { date, topup: 0, purchase: 0 };
         if (tx.type === 'topup') dailyData[date].topup += Math.abs(amount);
         if (tx.type === 'purchase') dailyData[date].purchase += Math.abs(amount);
       });
       setChartData(Object.values(dailyData).reverse());
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, txPath);
-    });
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'payment'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setPaymentSettings(prev => ({
-          ...prev,
-          trueMoneyNumber: data.trueMoneyNumber || '',
-          paymentQrUrl: data.paymentQrUrl || '',
-          bankHolder: data.bankHolder || '',
-          minTopup: data.minTopup || 50
-        }));
-      }
-    });
+    } catch (error) {
+      console.error('Failed to fetch transaction data:', error);
+    }
+  };
 
-    const unsubKeys = onSnapshot(doc(db, 'settings', 'payment_keys'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setPaymentSettings(prev => ({
-          ...prev,
-          easySlipApiKey: data.easySlipApiKey || '',
-          darkxApiKey: data.darkxApiKey || ''
-        }));
-      }
-    });
-
-    const unsubMethods = onSnapshot(doc(db, 'settings', 'payment_methods'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setPaymentMethods({
-          promptpay: data.promptpay || 'open',
-          truemoney: data.truemoney || 'open',
-          manual: data.manual || 'open'
-        });
-      }
-    });
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      const mapping: { [key: string]: string } = {};
-      snap.docs.forEach(doc => {
-        mapping[doc.id] = doc.data().email || 'Unknown';
-      });
-      setUserMap(mapping);
-    });
-
-    const unsubManual = onSnapshot(query(collection(db, 'manual_topups'), orderBy('createdAt', 'desc'), limit(100)), (snap) => {
-      setManualTopups(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => {
-      unsub();
-      unsubSettings();
-      unsubKeys();
-      unsubMethods();
-      unsubUsers();
-      unsubManual();
-    };
-  }, []);
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [userIdFilter]);
 
   const handleSetMethodStatus = async (method: 'promptpay' | 'truemoney' | 'manual', status: string) => {
     try {
       setPaymentMethods(prev => ({ ...prev, [method]: status }));
-      await setDoc(doc(db, 'settings', 'payment_methods'), {
-        [method]: status
-      }, { merge: true });
+      await axios.post('/api/admin/settings/payment_methods', { ...paymentMethods, [method]: status });
+      fetchData();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings/payment_methods');
+      console.error('Failed to update method status:', error);
     }
   };
 
@@ -175,10 +136,13 @@ export function Transactions() {
     setSavingSettings(true);
     try {
       const { easySlipApiKey, darkxApiKey, ...publicSettings } = paymentSettings;
-      await setDoc(doc(db, 'settings', 'payment'), publicSettings, { merge: true });
-      await setDoc(doc(db, 'settings', 'payment_keys'), { easySlipApiKey, darkxApiKey }, { merge: true });
+      await Promise.all([
+        axios.post('/api/admin/settings/payment', publicSettings),
+        axios.post('/api/admin/settings/payment_keys', { easySlipApiKey, darkxApiKey })
+      ]);
+      fetchData();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
+      console.error('Failed to save settings:', error);
     } finally {
       setSavingSettings(false);
     }

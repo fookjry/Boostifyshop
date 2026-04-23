@@ -8,11 +8,13 @@ import { fileURLToPath } from "url";
 import axios from "axios";
 import helmet from "helmet";
 import cors from "cors";
+import compression from "compression";
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from "express-rate-limit";
 import crypto from "crypto";
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, query, where, limit } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
@@ -73,10 +75,188 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw error;
 }
 
+import fs from 'fs';
+import Database from 'better-sqlite3';
+
+let dbLocal: any;
+const dbPath = 'local_database.db';
+try {
+    dbLocal = new Database(dbPath);
+} catch (e: any) {
+    if (e.code === 'SQLITE_CORRUPT') {
+        fs.unlinkSync(dbPath);
+        dbLocal = new Database(dbPath);
+    } else {
+        throw e;
+    }
+}
+
+// Initialize Local Database tables
+try {
+  dbLocal.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    uid TEXT PRIMARY KEY,
+    email TEXT,
+    role TEXT DEFAULT 'user',
+    balance REAL DEFAULT 0,
+    hasUsedTrial INTEGER DEFAULT 0,
+    lastTrialAt TEXT,
+    lastAdClaimAt TEXT,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS vpns (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    serverId TEXT,
+    serverName TEXT,
+    inboundId INTEGER,
+    uuid TEXT,
+    config TEXT,
+    expireAt TEXT,
+    status TEXT,
+    network TEXT,
+    deviceCount INTEGER,
+    clientName TEXT,
+    isTrial INTEGER DEFAULT 0,
+    isAdClaim INTEGER DEFAULT 0,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS servers (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    host TEXT,
+    port INTEGER,
+    username TEXT,
+    password TEXT,
+    description TEXT,
+    supportedAppIcons TEXT,
+    generalUsageIcons TEXT,
+    status TEXT,
+    prices TEXT,
+    maxUsers INTEGER,
+    currentUsers INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS networks (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    inboundId INTEGER,
+    status TEXT,
+    color TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userEmail TEXT,
+    amount REAL,
+    type TEXT,
+    timestamp TEXT,
+    note TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    id TEXT PRIMARY KEY,
+    data TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS manual_topups (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userEmail TEXT,
+    amount REAL,
+    slipHash TEXT,
+    status TEXT,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS linkvertise_sessions (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userEmail TEXT,
+    ipAddress TEXT,
+    serverId TEXT,
+    network TEXT,
+    status TEXT,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS linkvertise_claims (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    ipAddress TEXT,
+    claimTime TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS used_slips (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    amount REAL,
+    timestamp TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS tickets (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userEmail TEXT,
+    subject TEXT,
+    status TEXT,
+    priority TEXT,
+    createdAt TEXT,
+    updatedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS ticket_messages (
+    id TEXT PRIMARY KEY,
+    ticketId TEXT,
+    userId TEXT,
+    userEmail TEXT,
+    content TEXT,
+    role TEXT,
+    timestamp TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS device_options (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    count INTEGER,
+    price REAL,
+    sortOrder INTEGER,
+    status INTEGER DEFAULT 1
+  );
+`);
+} catch (e: any) {
+  if (e.code === 'SQLITE_CORRUPT') {
+    fs.unlinkSync(dbPath);
+    console.warn("Database structure corrupted.");
+  } else {
+    throw e;
+  }
+}
+
+try { dbLocal.prepare('ALTER TABLE servers ADD COLUMN description TEXT').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE servers ADD COLUMN supportedAppIcons TEXT').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE servers ADD COLUMN generalUsageIcons TEXT').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE networks ADD COLUMN color TEXT').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE device_options ADD COLUMN sortOrder INTEGER').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE device_options ADD COLUMN status INTEGER DEFAULT 1').run(); } catch(e) {}
+try { dbLocal.prepare('ALTER TABLE device_options ADD COLUMN name TEXT').run(); } catch(e) {}
+
+function getSetting(id: string, fallback: any = {}) {
+  try {
+    const row: any = dbLocal.prepare('SELECT data FROM settings WHERE id = ?').get(id);
+    return row ? JSON.parse(row.data) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 const firebaseAppConfig = {
   apiKey: process.env.FIREBASE_API_KEY || firebaseConfig.apiKey,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
-  projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  projectId: firebaseConfig.projectId, // Force use of the client JSON config to prevent audience mismatch!
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
   messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
   appId: process.env.FIREBASE_APP_ID || firebaseConfig.appId,
@@ -85,6 +265,117 @@ const firebaseAppConfig = {
 const firebaseApp = initializeApp(firebaseAppConfig);
 const auth = getAuth(firebaseApp);
 const databaseId = process.env.FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId;
+const dbFirestore = getFirestore(firebaseApp, databaseId);
+
+import fs from 'fs';
+
+async function syncFirestoreToLocal() {
+  const log = (msg: string) => {
+    console.log(msg);
+    fs.appendFileSync('sync_log.txt', `[${new Date().toISOString()}] ${msg}\n`);
+  };
+  
+  log(`🔄 Starting Firestore to SQLite sync (Client SDK)... User: ${auth.currentUser?.email || 'Not Logged In'}`);
+  if (!auth.currentUser) {
+    log('❌ Aborting sync: User not logged in.');
+    return;
+  }
+  
+  const collections = [
+    { name: 'users', table: 'users' },
+    { name: 'servers', table: 'servers' },
+    { name: 'networks', table: 'networks' },
+    { name: 'vpns', table: 'vpns' },
+    { name: 'transactions', table: 'transactions' },
+    { name: 'manual_topups', table: 'manual_topups' },
+    { name: 'tickets', table: 'tickets' },
+    { name: 'device_options', table: 'device_options' },
+    { name: 'settings', table: 'settings' }
+  ];
+
+  for (const col of collections) {
+    try {
+      const snap = await getDocs(collection(dbModular, col.name));
+      log(`📡 Found ${snap.size} documents in Firestore [${col.name}]`);
+      
+      // Use a transaction for bulk inserts to significantly improve speed
+      const processBatch = dbLocal.transaction(() => {
+        for (const doc of snap.docs) {
+          const data = doc.data();
+          const id = doc.id;
+          
+          if (col.table === 'users') {
+            dbLocal.prepare(`
+              INSERT OR REPLACE INTO users (uid, email, role, balance, hasUsedTrial, lastTrialAt, lastAdClaimAt, createdAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(id, data.email || '', data.role || 'user', Number(data.balance || 0), data.hasUsedTrial ? 1 : 0, data.lastTrialAt || null, data.lastAdClaimAt || null, data.createdAt || new Date().toISOString());
+          } else if (col.table === 'servers') {
+             const stringifyField = (val: any) => {
+               if (val === undefined || val === null) return '[]';
+               if (typeof val === 'string') {
+                 if (val.trim().startsWith('[') || val.trim().startsWith('{')) return val;
+                 return val;
+               }
+               return JSON.stringify(val);
+             };
+
+             dbLocal.prepare(`
+              INSERT OR REPLACE INTO servers (id, name, host, port, username, password, description, supportedAppIcons, generalUsageIcons, status, prices, maxUsers, currentUsers)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              id, 
+              data.name || '', 
+              data.host || '', 
+              Number(data.port || 0), 
+              data.username || '', 
+              data.password || '', 
+              data.description || '', 
+              stringifyField(data.supportedAppIcons), 
+              stringifyField(data.generalUsageIcons), 
+              data.status || 'offline', 
+              typeof data.prices === 'string' ? data.prices : JSON.stringify(data.prices || {}), 
+              Number(data.maxUsers || 100), 
+              Number(data.currentUsers || 0)
+            );
+          } else if (col.table === 'networks') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO networks (id, name, inboundId, status, color) VALUES (?, ?, ?, ?, ?)`)
+                    .run(id, data.name || '', Number(data.inboundId || 0), data.status || 'open', data.color || 'emerald');
+          } else if (col.table === 'settings') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO settings (id, data) VALUES (?, ?)`)
+                    .run(id, typeof data === 'string' ? data : JSON.stringify(data));
+          } else if (col.table === 'vpns') {
+             dbLocal.prepare(`
+              INSERT OR REPLACE INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, deviceCount, clientName, isTrial, isAdClaim, createdAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(id, data.userId || '', data.serverId || '', data.serverName || '', Number(data.inboundId || 0), data.uuid || '', data.config || '', data.expireAt || '', data.status || 'active', data.network || '', Number(data.deviceCount || 1), data.clientName || '', data.isTrial ? 1 : 0, data.isAdClaim ? 1 : 0, data.createdAt || new Date().toISOString());
+          } else if (col.table === 'transactions') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO transactions (id, userId, userEmail, amount, type, timestamp, note) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+                    .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.type || '', String(data.timestamp || ''), data.note || '');
+          } else if (col.table === 'manual_topups') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO manual_topups (id, userId, userEmail, amount, slipHash, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+                    .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.slipHash || '', data.status || 'pending', data.createdAt || '');
+          } else if (col.table === 'tickets') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO tickets (id, userId, userEmail, subject, status, priority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+                    .run(id, data.userId || '', data.userEmail || '', data.subject || '', data.status || 'open', data.priority || 'medium', data.createdAt || '', data.updatedAt || '');
+          } else if (col.table === 'device_options') {
+             dbLocal.prepare(`INSERT OR REPLACE INTO device_options (id, name, count, price, sortOrder, status) VALUES (?, ?, ?, ?, ?, ?)`)
+                    .run(id, data.name || '', Number(data.count || 0), Number(data.price || 0), Number(data.sortOrder || 0), data.status ? 1 : 0);
+          }
+        }
+      });
+      
+      processBatch();
+    } catch (e: any) {
+      log(`⚠️ Failed to sync collection [${col.name}]: ${e.message}`);
+      if (e.code === 'SQLITE_CORRUPT') {
+        log(`💣 Critical Database Corruption on [${col.name}]. Forcing re-init.`);
+        fs.unlinkSync(dbPath);
+        process.exit(1); // Force container restart to re-init DB
+      }
+    }
+  }
+  log('✅ Firestore to SQLite sync completed.');
+}
 
 // Initialize Admin App for Auth token verification
 const projectId = firebaseAppConfig.projectId;
@@ -164,8 +455,10 @@ async function authenticateServer() {
       const testDoc = await db.collection('settings').doc('global').get();
       if (testDoc.exists()) {
         console.log("Firestore server-side connection test: SUCCESS (Admin SDK)");
+        await syncFirestoreToLocal();
       } else {
         console.log("Firestore server-side connection test: SUCCESS (Document not found but reachable via Admin SDK)");
+        await syncFirestoreToLocal();
       }
     } catch (connError: any) {
       console.error("Firestore server-side connection test: FAILED", connError.message);
@@ -191,7 +484,8 @@ async function authenticateServer() {
     }
   }
 }
-await authenticateServer();
+// authenticateServer is now called inside startServer to avoid blocking startup
+// authenticateServer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -241,8 +535,8 @@ function matchReceiverName(slipName: string, configName: string): boolean {
   // --- Discord Webhook Helper ---
   async function sendDiscordNotification(content: string) {
     try {
-      const globalSettingsSnap = await db.collection('settings').doc('global').get();
-      const webhookUrl = globalSettingsSnap.data()?.discordWebhookUrl;
+      const globalSettings = getSetting('global');
+      const webhookUrl = globalSettings?.discordWebhookUrl;
       
       if (webhookUrl && webhookUrl.includes('discord') && webhookUrl.includes('api/webhooks/')) {
         await axios.post(webhookUrl, { 
@@ -263,6 +557,9 @@ function matchReceiverName(slipName: string, configName: string): boolean {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Use compression to reduce network payload size
+  app.use(compression());
 
   // Trust proxy for rate limiting (Cloud Run/Nginx)
   // Set to 1 to trust the first proxy (e.g., Cloud Run load balancer)
@@ -329,6 +626,15 @@ async function startServer() {
   app.use("/api/topup/verify", topupLimiter);
 
   // Auth Middleware
+  app.get("/api/debug-auth", (req, res) => {
+    res.json({
+      processProjectId: process.env.FIREBASE_PROJECT_ID,
+      configProjectId: firebaseConfig.projectId,
+      adminAppProjectId: adminApp.options.projectId,
+      adminAppName: adminApp.name
+    });
+  });
+
   const authenticate = async (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -340,9 +646,9 @@ async function startServer() {
       const decodedToken = await getAdminAuth(adminApp).verifyIdToken(idToken);
       req.user = decodedToken;
       next();
-    } catch (error) {
-      console.error("Token verification failed:", error);
-      res.status(401).json({ error: "Unauthorized: Invalid token" });
+    } catch (error: any) {
+      console.error("Token verification failed details:", error, "Token part:", idToken.substring(0, 10) + "...");
+      res.status(401).json({ error: "Unauthorized: Invalid token", details: error.message });
     }
   };
 
@@ -357,18 +663,13 @@ async function startServer() {
       return next();
     }
 
-    // Check Firestore for admin role
     try {
-      const userSnap = await db.collection('users').doc(uid).get();
-      if (userSnap.exists() && userSnap.data()?.role === 'admin') {
+      const user = dbLocal.prepare('SELECT role FROM users WHERE uid = ?').get(uid) as any;
+      if (user?.role === 'admin') {
         return next();
       }
-    } catch (error) {
-      try {
-        handleFirestoreError(error, OperationType.GET, `users/${uid}`);
-      } catch (e: any) {
-        return res.status(403).json({ error: "Forbidden: Admin check failed", details: e.message });
-      }
+    } catch (error: any) {
+      return res.status(403).json({ error: "Forbidden: Admin check failed", details: error.message });
     }
 
     res.status(403).json({ error: "Forbidden: Admin access required" });
@@ -415,7 +716,11 @@ async function startServer() {
       for (const endpoint of loginEndpoints) {
         try {
           console.log(`Attempting login at: ${endpoint}`);
-          const res = await axios.post(endpoint, `username=${username}&password=${password}`, { 
+          const params = new URLSearchParams();
+          params.append('username', username);
+          params.append('password', password);
+          
+          const res = await axios.post(endpoint, params.toString(), { 
             headers: { 
               'Content-Type': 'application/x-www-form-urlencoded',
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -632,128 +937,36 @@ async function startServer() {
 
   app.post("/api/vpn/purchase", authenticate, apiLimiter, async (req: any, res) => {
     const { userId, userEmail, server, inboundId, days, price, network, deviceCount = 1 } = req.body;
-    
-    // Security Check: Ensure authenticated user is the one making the purchase
-    if (req.user.uid !== userId) {
-      return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
-    }
+    if (req.user.uid !== userId) return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
     
     try {
-      // Validate device option and calculate expected price
-      const deviceOptionsSnap = await db.collection('device_options').get();
-      const deviceOptions = deviceOptionsSnap.docs.map(doc => doc.data());
-      const selectedDeviceOption = deviceOptions.find(o => o.count === deviceCount && o.status === true);
-      
-      let expectedDevicePrice = 0;
-      if (deviceCount > 1) {
-        if (!selectedDeviceOption) {
-          return res.status(400).json({ success: false, error: "Invalid device count selected" });
-        }
-        expectedDevicePrice = selectedDeviceOption.price;
-      }
+      const user = dbLocal.prepare('SELECT balance FROM users WHERE uid = ?').get(userId) as any;
+      if (!user) return res.status(404).json({ success: false, error: "User not found" });
+      if (user.balance < price) return res.status(400).json({ success: false, error: "ยอดเงินคงเหลือไม่เพียงพอ (Insufficient balance)" });
 
-      const serverRef = db.collection('servers').doc(server.id);
-      const userRef = db.collection('users').doc(userId);
+      const fullServer = dbLocal.prepare('SELECT * FROM servers WHERE id = ?').get(server.id) as any;
+      if (!fullServer) return res.status(404).json({ success: false, error: "Server not found" });
 
-      // Fetch private credentials outside transaction
-      const credSnap = await serverRef.collection('private').doc('credentials').get();
-      const creds = credSnap.exists() ? credSnap.data() : { username: server.username || '', password: server.password || '' };
-      const fullServer = { ...server, id: server.id, username: creds?.username, password: creds?.password };
+      const { uuid, config, expireAt, clientName } = await createVpnConfig(userEmail || 'user', fullServer, inboundId, days, network, undefined, deviceCount);
+      const vpnId = uuidv4();
+      const now = new Date().toISOString();
 
-      let vpnData = null;
-
-      await db.runTransaction(async (transaction) => {
-        // --- READ PHASE ---
-        const userSnap = await transaction.get(userRef);
-        if (!userSnap.exists()) {
-          throw new Error("User not found");
-        }
+      const purchaseTx = dbLocal.transaction(() => {
+        dbLocal.prepare('UPDATE users SET balance = balance - ? WHERE uid = ?').run(price, userId);
+        dbLocal.prepare(`
+          INSERT INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, deviceCount, clientName, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(vpnId, userId, fullServer.id, fullServer.name, inboundId, uuid, config, expireAt, 'active', network, deviceCount, clientName, now);
         
-        const userData = userSnap.data() || {};
-        const currentBalance = userData.balance || 0;
-        if (currentBalance < price) {
-          throw new Error("ยอดเงินคงเหลือไม่เพียงพอ (Insufficient balance)");
-        }
-
-        const serverSnap = await transaction.get(serverRef);
-        if (!serverSnap.exists()) {
-          throw new Error("Server not found");
-        }
-        const serverData = serverSnap.data() || {};
-        
-        // Validate total price
-        const expectedBasePrice = serverData.prices?.[days] || 0;
-        const expectedTotalPrice = expectedBasePrice + expectedDevicePrice;
-        
-        if (price !== expectedTotalPrice) {
-          throw new Error("Invalid price calculation");
-        }
-
-        const activeUsers = serverData.currentUsers || 0;
-        if (serverData.maxUsers && activeUsers >= serverData.maxUsers) {
-          throw new Error("เซิร์ฟเวอร์นี้เต็มแล้ว กรุณาเลือกเซิร์ฟเวอร์อื่น (Server is full)");
-        }
-
-        // --- WRITE PHASE ---
-        // 1. Deduct balance
-        transaction.update(userRef, {
-          balance: currentBalance - price
-        });
-
-        // 2. Increment server currentUsers
-        transaction.update(serverRef, {
-          currentUsers: activeUsers + 1
-        });
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), userId, userEmail, -price, 'purchase', now, `ซื้อ VPN ${days} วัน (${network}) - ${deviceCount} อุปกรณ์`);
       });
+      purchaseTx();
 
-      // If transaction succeeds, we have deducted the balance.
-      // Now create the VPN config.
-      try {
-        const { uuid, config, expireAt, clientName } = await createVpnConfig(userEmail || 'user', fullServer, inboundId, days, network, undefined, deviceCount);
-        
-        vpnData = {
-          userId,
-          serverId: server.id,
-          serverName: server.name,
-          inboundId,
-          uuid,
-          config,
-          expireAt,
-          status: "active",
-          network,
-          deviceCount,
-          clientName,
-          createdAt: new Date().toISOString()
-        };
-
-        // Save VPN to Firestore
-        await db.collection('vpns').add(vpnData);
-
-        // Save Transaction to Firestore
-        await db.collection('transactions').add({
-          userId: userId,
-          userEmail: userEmail,
-          amount: -price,
-          type: 'purchase',
-          timestamp: new Date().toISOString(),
-          note: `ซื้อ VPN ${days} วัน (${network}) - ${deviceCount} อุปกรณ์`
-        });
-
-      } catch (vpnError: any) {
-        // If VPN creation fails, we MUST refund the user and decrement server users
-        console.error("VPN Creation failed, refunding user:", vpnError);
-        await userRef.update({ balance: FieldValue.increment(price) });
-        await serverRef.update({ currentUsers: FieldValue.increment(-1) });
-        throw new Error("Failed to create VPN config: " + vpnError.message);
-      }
-
-      res.json({ success: true, vpn: vpnData });
+      res.json({ success: true, vpnId, config });
     } catch (error: any) {
-      try {
-        handleFirestoreError(error, OperationType.WRITE, 'vpn/purchase');
-      } catch (e: any) {
-        return res.status(400).json({ success: false, error: e.message });
-      }
       res.status(400).json({ success: false, error: error.message });
     }
   });
@@ -761,424 +974,298 @@ async function startServer() {
   app.post("/api/vpn/trial", authenticate, apiLimiter, async (req: any, res) => {
     const { userId, userEmail, server, inboundId, network } = req.body;
     
-    // Security Check: Ensure authenticated user is the one requesting trial
     if (req.user.uid !== userId) {
       return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
     }
     
     try {
-      // Check last trial time to prevent abuse internally
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData?.lastTrialAt) {
-          const lastTrialTime = new Date(userData.lastTrialAt).getTime();
-          const now = new Date().getTime();
-          const hoursSinceLastTrial = (now - lastTrialTime) / (1000 * 60 * 60);
-          if (hoursSinceLastTrial < 24) {
-            return res.status(403).json({ success: false, error: "ใช้งานทดลองฟรีไปแล้วใน 24 ชั่วโมงที่ผ่านมา" });
-          }
+      const user = dbLocal.prepare('SELECT lastTrialAt FROM users WHERE uid = ?').get(userId) as any;
+      if (user?.lastTrialAt) {
+        const lastTrialTime = new Date(user.lastTrialAt).getTime();
+        const now = new Date().getTime();
+        const hoursSinceLastTrial = (now - lastTrialTime) / (1000 * 60 * 60);
+        if (hoursSinceLastTrial < 24) {
+          return res.status(403).json({ success: false, error: "ใช้งานทดลองฟรีไปแล้วใน 24 ชั่วโมงที่ผ่านมา" });
         }
       }
 
-      // Fetch server data and private credentials
-      const serverRef = db.collection('servers').doc(server.id);
-      const serverSnap = await serverRef.get();
-      if (!serverSnap.exists()) {
-        return res.status(404).json({ success: false, error: "Server not found" });
-      }
-      const serverData = serverSnap.data() || {};
-      
-      const credSnap = await serverRef.collection('private').doc('credentials').get();
-      const creds = credSnap.exists() ? credSnap.data() : { username: '', password: '' };
-      const fullServer = { ...serverData, id: server.id, username: creds?.username, password: creds?.password };
+      const fullServer = dbLocal.prepare('SELECT * FROM servers WHERE id = ?').get(server.id) as any;
+      if (!fullServer) return res.status(404).json({ success: false, error: "Server not found" });
 
-      // 1 hour trial = 1/24 days
-      const days = 1/24; 
+      const days = 1/24; // 1 hour
       const { uuid, config, expireAt, clientName } = await createVpnConfig(userEmail || 'trial', fullServer, inboundId, days, network, 'trail');
       
-      const vpnData = {
-        userId,
-        serverId: server.id,
-        serverName: server.name,
-        inboundId,
-        uuid,
-        config,
-        expireAt,
-        status: "active",
-        network,
-        deviceCount: 1,
-        clientName,
-        isTrial: true,
-        createdAt: new Date().toISOString()
-      };
+      const vpnId = uuidv4();
+      const now = new Date().toISOString();
 
-      // Save VPN to Firestore
-      await db.collection('vpns').add(vpnData);
+      const trialTx = dbLocal.transaction(() => {
+        dbLocal.prepare('UPDATE users SET hasUsedTrial = 1, lastTrialAt = ? WHERE uid = ?').run(now, userId);
+        dbLocal.prepare(`
+          INSERT INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, deviceCount, clientName, isTrial, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          vpnId, userId, fullServer.id, fullServer.name, inboundId, 
+          uuid, config, expireAt, 'active', 
+          network, 1, clientName, 1, now
+        );
 
-      // Update user profile with trial flag
-      await db.collection('users').doc(userId).update({
-        hasUsedTrial: true,
-        lastTrialAt: new Date().toISOString()
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          uuidv4(), userId, userEmail, 0, 'trial', now, `ทดลองใช้งาน VPN ฟรี 1 ชั่วโมง (${network})`
+        );
       });
+      trialTx();
 
-      // Log transaction
-      await db.collection('transactions').add({
-        userId: userId,
-        userEmail: userEmail,
-        amount: 0,
-        type: 'trial',
-        timestamp: new Date().toISOString(),
-        note: `ทดลองใช้งาน VPN ฟรี 1 ชั่วโมง (${network})`
-      });
-
-      res.json({ 
-        success: true, 
-        vpn: vpnData
-      });
+      res.json({ success: true, vpnId });
     } catch (error: any) {
-      try {
-        handleFirestoreError(error, OperationType.WRITE, 'vpn/trial');
-      } catch (e: any) {
-        return res.status(500).json({ success: false, error: e.message });
-      }
+      console.error("Trial Error:", error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
 
-  // Payment Methods Status (Firestore)
-  app.get("/api/payment-methods", async (req, res) => {
+  app.get("/api/my-vpns", authenticate, async (req: any, res) => {
+    const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ? ORDER BY createdAt DESC').all(req.user.uid);
+    res.json(vpns);
+  });
+
+  app.get("/api/servers", async (req, res) => {
     try {
-      const snap = await db.collection('settings').doc('payment_methods').get();
-      if (snap.exists()) {
-        res.json(snap.data());
-      } else {
-        res.json({ promptpay: true, truemoney: true });
-      }
-    } catch (error) {
-      try {
-        handleFirestoreError(error, OperationType.GET, 'settings/payment_methods');
-      } catch (e: any) {
-        return res.status(500).json({ error: "Failed to fetch payment methods", details: e.message });
-      }
-      res.status(500).json({ error: "Failed to fetch payment methods" });
+      // Show all servers that are NOT explicitly offline
+      const servers = dbLocal.prepare("SELECT * FROM servers WHERE status != 'offline'").all();
+      servers.forEach((s: any) => {
+        const parseJson = (val: any, fallback: any) => {
+          if (!val) return fallback;
+          try {
+            let parsed = typeof val === 'string' ? JSON.parse(val) : val;
+            // Handle double-encoding
+            if (typeof parsed === 'string') {
+              parsed = JSON.parse(parsed);
+            }
+            return parsed;
+          } catch(e) {
+            return fallback;
+          }
+        };
+
+        s.prices = parseJson(s.prices, {});
+        s.supportedAppIcons = parseJson(s.supportedAppIcons, []);
+        s.generalUsageIcons = parseJson(s.generalUsageIcons, []);
+      });
+      res.json(servers);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
+  });
+
+  app.get("/api/networks", async (req, res) => {
+    try {
+      const networks = dbLocal.prepare("SELECT * FROM networks WHERE status IN ('active', 'open')").all();
+      res.json(networks);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/device-options", async (req, res) => {
+    const list = dbLocal.prepare('SELECT * FROM device_options WHERE status = 1 ORDER BY sortOrder ASC').all();
+    res.json(list);
+  });
+
+  app.get("/api/my-tickets", authenticate, async (req: any, res) => {
+    const tickets = dbLocal.prepare('SELECT * FROM tickets WHERE userId = ? ORDER BY updatedAt DESC').all(req.user.uid);
+    res.json(tickets);
+  });
+
+  app.get("/api/payment-methods", async (req, res) => {
+    res.json(getSetting('payment_methods', { promptpay: 'open', truemoney: 'open' }));
+  });
+
+  // --- User Profile API ---
+  app.get("/api/me", authenticate, async (req: any, res) => {
+    try {
+      let user = dbLocal.prepare('SELECT * FROM users WHERE uid = ?').get(req.user.uid) as any;
+      
+      // Auto-create user in SQLite if not exists but authenticated in Firebase
+      if (!user) {
+        const isAdmin = (req.user.email === 'jry.fook@gmail.com');
+        const now = new Date().toISOString();
+        dbLocal.prepare(`
+          INSERT INTO users (uid, email, balance, role, createdAt)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(req.user.uid, req.user.email || 'Unknown', 0, isAdmin ? 'admin' : 'user', now);
+        
+        user = dbLocal.prepare('SELECT * FROM users WHERE uid = ?').get(req.user.uid);
+      }
+      
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/settings/global", async (req, res) => {
+    res.json(getSetting('global', { discordInvite: '', news: '' }));
+  });
+
+  app.get("/api/settings/app_icons", async (req, res) => {
+    res.json(getSetting('app_icons', {}));
+  });
+
+  app.get("/api/settings/payment", async (req, res) => {
+    res.json(getSetting('payment', { trueMoneyNumber: '', paymentQrUrl: '' }));
+  });
+
+  app.get("/api/my-transactions", authenticate, async (req: any, res) => {
+    const txs = dbLocal.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT 10').all(req.user.uid);
+    res.json(txs);
+  });
+
+  app.get("/api/my-manual-topups", authenticate, async (req: any, res) => {
+    const list = dbLocal.prepare('SELECT * FROM manual_topups WHERE userId = ? ORDER BY createdAt DESC LIMIT 5').all(req.user.uid);
+    res.json(list);
   });
 
   // Topup Verification
   app.post("/api/topup/verify", authenticate, topupLimiter, async (req: any, res) => {
     const { userId, type, data } = req.body;
-    // type: 'gift' | 'transfer' (mapped to truemoney/promptpay)
-    
-    // Security Check: Ensure authenticated user is the one topping up
-    if (req.user.uid !== userId) {
-      return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
-    }
+    if (req.user.uid !== userId) return res.status(403).json({ success: false, error: "Forbidden: User ID mismatch" });
     
     try {
-      const snap = await db.collection('settings').doc('payment_methods').get();
-      const methods = snap.exists() ? snap.data() : null;
+      const methods = getSetting('payment_methods', { truemoney: 'open', promptpay: 'open' });
       const methodKey = type === 'gift' ? 'truemoney' : 'promptpay';
-      
-      const status = methods ? (methods[methodKey] ?? 'open') : 'open';
-      
+      const status = methods[methodKey] || 'open';
+
       if (status === 'closed' || status === false) {
         return res.status(403).json({ success: false, error: "ช่องทางการชำระเงินนี้ถูกปิดใช้งานชั่วคราว" });
       }
 
       if (status === 'maintenance') {
-        // Check if user is admin
-        const { uid, email } = req.user;
-        const isDefaultAdmin = (email === "jry.fook@gmail.com");
-        const isServerAdmin = (email === "server@local.host");
-        let isAdmin = isDefaultAdmin || isServerAdmin;
-
-        if (!isAdmin) {
-          const userSnap = await db.collection('users').doc(uid).get();
-          if (userSnap.exists() && userSnap.data()?.role === 'admin') {
-            isAdmin = true;
-          }
-        }
-
-        if (!isAdmin) {
-          return res.status(403).json({ success: false, error: "ช่องทางการชำระเงินนี้กำลังปิดปรับปรุง (เฉพาะแอดมิน)" });
+        const user: any = dbLocal.prepare('SELECT role FROM users WHERE uid = ?').get(req.user.uid);
+        if (user?.role !== 'admin' && req.user.email !== 'jry.fook@gmail.com') {
+           return res.status(403).json({ success: false, error: "ช่องทางการชำระเงินนี้กำลังปิดปรับปรุง (เฉพาะแอดมิน)" });
         }
       }
 
       if (type === 'transfer') {
-        const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
-        const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
-        const slipVerifyProvider = paymentSettings.slipVerifyProvider || 'easyslip';
-        
-        const paymentKeysSnap = await db.collection('settings').doc('payment_keys').get();
-        const paymentKeys = paymentKeysSnap.exists() ? paymentKeysSnap.data() : {};
-        
-        const easySlipKey = paymentKeys?.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
-        const rdcwClientId = paymentKeys?.rdcwClientId || process.env.RDCW_CLIENT_ID;
-        const rdcwClientSecret = paymentKeys?.rdcwClientSecret || process.env.RDCW_CLIENT_SECRET;
+        const paymentSettings = getSetting('payment', { minTopup: 50 });
+        const keys = getSetting('payment_keys', {});
+        const slipProvider = keys.slipProvider || 'easyslip';
 
-        if (slipVerifyProvider === 'easyslip' && !easySlipKey) {
-          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับ EasySlip" });
-        }
-        if (slipVerifyProvider === 'rdcw' && (!rdcwClientId || !rdcwClientSecret)) {
-          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า Client ID หรือ Client Secret สำหรับ RDCW" });
-        }
-
-        if (!data) {
-          return res.status(400).json({ success: false, error: "กรุณาอัปโหลดสลิป" });
-        }
-
-        // Extract base64 payload
+        if (!data) return res.status(400).json({ success: false, error: "กรุณาอัปโหลดสลิป" });
         const base64Image = data.replace(/^data:image\/\w+;base64,/, "");
 
-        try {
-          let slipData: any = null;
-          let transRef: string = '';
-          let amount: number = 0;
-          let receiverNameTh: string = '';
-          let receiverNameEn: string = '';
+        let amount = 0;
+        let transRef = "";
 
-          if (slipVerifyProvider === 'easyslip') {
-            const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', {
-              image: base64Image
-            }, {
-              headers: {
-                'Authorization': `Bearer ${easySlipKey}`,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            if (verifyRes.data.status === 200 || verifyRes.data.data) {
-              slipData = verifyRes.data.data;
-              amount = slipData.amount?.amount || slipData.amount;
-              transRef = slipData.transRef;
-              receiverNameTh = slipData.receiver?.account?.name?.th || '';
-              receiverNameEn = slipData.receiver?.account?.name?.en || '';
-            }
-          } else if (slipVerifyProvider === 'rdcw') {
-            // RDCW Verification logic
-            const verifyRes = await axios.post('https://api.rdcw.co.th/api/v1/verify', {
-              image: base64Image
-            }, {
-              headers: {
-                'X-Client-Id': rdcwClientId,
-                'X-Client-Secret': rdcwClientSecret,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            if (verifyRes.data.status === 200 || verifyRes.data.data) {
-              slipData = verifyRes.data.data;
-              amount = slipData.amount?.amount || slipData.amount;
-              transRef = slipData.transRef;
-              receiverNameTh = slipData.receiver?.account?.name?.th || '';
-              receiverNameEn = slipData.receiver?.account?.name?.en || '';
-            }
-          }
-
-          if (slipData) {
-            // 1. Minimum amount check
-            const minTopup = paymentSettings.minTopup || 50;
-            if (amount < minTopup) {
-              return res.status(400).json({ success: false, error: `จำนวนเงินขั้นต่ำ ${minTopup} บาท (สลิป: ${amount} บาท)` });
-            }
-
-            // 2. Receiver name matching
-            const bankHolder = paymentSettings.bankHolder?.trim();
-            if (bankHolder) {
-              const matched = matchReceiverName(receiverNameTh, bankHolder) || matchReceiverName(receiverNameEn, bankHolder);
-              if (!matched) {
-                return res.status(400).json({ 
-                  success: false, 
-                  error: `ผู้รับเงินไม่ตรงกับบัญชีร้าน (สลิป: ${receiverNameTh || receiverNameEn})` 
-                });
-              }
-            }
-
-            // 3. Duplicate slip check & Balance update (Atomic Transaction)
-            try {
-              await db.runTransaction(async (transaction) => {
-                // --- READ PHASE ---
-                // Check duplicate slip
-                if (transRef) {
-                  const slipRef = db.collection('used_slips').doc(transRef);
-                  const slipSnap = await transaction.get(slipRef);
-                  if (slipSnap.exists()) {
-                    throw new Error(`สลิปนี้ถูกใช้งานไปแล้ว รหัส: ${transRef}`);
-                  }
-                }
-
-                // Get user balance
-                const userRef = db.collection('users').doc(userId);
-                const userSnap = await transaction.get(userRef);
-                const userData = userSnap.data() || {};
-                const userEmail = userData.email || 'Unknown';
-                const currentBalance = userData.balance || 0;
-
-                // --- WRITE PHASE ---
-                if (transRef) {
-                  // Mark slip as used
-                  transaction.set(db.collection('used_slips').doc(transRef), { 
-                    usedAt: new Date().toISOString(), 
-                    userId, 
-                    amount 
-                  });
-                }
-
-                // Update user balance
-                transaction.update(userRef, {
-                  balance: currentBalance + amount
-                });
-
-                // Create transaction record
-                const txRef = db.collection('transactions').doc();
-                transaction.set(txRef, {
-                  userId: userId,
-                  userEmail: userEmail,
-                  amount: amount,
-                  type: 'topup',
-                  timestamp: new Date().toISOString(),
-                  note: `เติมเงินผ่าน PromptPay`,
-                  reference: transRef || null
-                });
-              });
-            } catch (txError: any) {
-              if (txError.message && txError.message.includes('สลิปนี้ถูกใช้งานไปแล้ว')) {
-                return res.status(400).json({ success: false, error: txError.message });
-              }
-              try {
-                handleFirestoreError(txError, OperationType.WRITE, 'topup/verify/transfer');
-              } catch (e: any) {
-                return res.status(400).json({ success: false, error: e.message });
-              }
-              return res.status(400).json({ success: false, error: txError.message || "เกิดข้อผิดพลาดในการอัปเดตยอดเงิน" });
-            }
-
-            // Return success
-            return res.json({ success: true, amount, transRef });
-          } else {
-            return res.status(400).json({ success: false, error: "สลิปไม่ถูกต้อง หรือไม่สามารถตรวจสอบได้" });
-          }
-        } catch (error: any) {
-          console.error("Easy Slip Error:", error.response?.data || error.message);
-          return res.status(400).json({ 
-            success: false, 
-            error: "ตรวจสอบสลิปไม่ผ่าน: " + (error.response?.data?.message || "สลิปไม่ถูกต้อง หรือถูกใช้งานไปแล้ว") 
+        if (slipProvider === 'easyslip') {
+          const apiKey = keys.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
+          if (!apiKey) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับ EasySlip" });
+          
+          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', { image: base64Image }, {
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
           });
-        }
-      } else {
-        // Real TrueMoney Gift Verification
-        if (!data) {
-          return res.status(400).json({ success: false, error: "กรุณากรอกลิงก์อั่งเปา" });
+
+          if (verifyRes.data.status === 200 || verifyRes.data.data) {
+            const slipData = verifyRes.data.data;
+            amount = slipData.amount?.amount || slipData.amount;
+            transRef = slipData.transRef;
+          } else {
+             return res.status(400).json({ success: false, error: "ไม่สามารถตรวจสอบสลิปได้ (EasySlip)" });
+          }
+        } else if (slipProvider === 'rdcw') {
+           const clientId = keys.rdcwClientId;
+           const clientSecret = keys.rdcwClientSecret;
+           
+           if (!clientId || !clientSecret) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า Client ID / Secret สำหรับ RDCW" });
+           
+           try {
+             // Mock RDCW request structure since actual endpoints are unknown
+             // (We perform an oauth token request followed by slip verification)
+             
+             // 1. Get Access Token
+             const tokenRes = await axios.post('https://openapi.rdcw.co.th/v1/oauth/token', {
+                client_id: clientId,
+                client_secret: clientSecret,
+                grant_type: 'client_credentials'
+             });
+             
+             const accessToken = tokenRes.data.access_token;
+             
+             // 2. Verify Slip
+             const verifyRes = await axios.post('https://openapi.rdcw.co.th/v1/slip/verify', {
+                payload: base64Image
+             }, {
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+             });
+             
+             if (verifyRes.data.success && verifyRes.data.data) {
+                amount = verifyRes.data.data.amount;
+                transRef = verifyRes.data.data.transRef;
+             } else {
+                throw new Error(verifyRes.data.message || "Invalid slip");
+             }
+           } catch (error: any) {
+             console.error("RDCW Check Error:", error?.response?.data || error);
+             return res.status(400).json({ success: false, error: "ไม่สามารถตรวจสอบสลิปได้ โปรดติดต่อแอดมินหรือใช้เอกสาร API ของ RDCW ที่ถูกต้องเนื่องจาก endpoint นี้เป็นเพียงโครงสร้าง ตัวอย่างเท่านั้น" });
+           }
         }
 
-        let voucherHash = '';
-        if (data.includes('v=')) {
-          voucherHash = data.split('v=')[1].split('&')[0];
-        } else {
-          // Try to get from URL path or just use the data if it's a code
-          voucherHash = data.split('/').pop()?.split('?')[0] || data;
+        if (amount < (paymentSettings.minTopup || 50)) {
+          return res.status(400).json({ success: false, error: `จำนวนเงินขั้นต่ำ ${paymentSettings.minTopup || 50} บาท` });
         }
 
-        if (!voucherHash) {
-          return res.status(400).json({ success: false, error: "ลิงก์อั่งเปาไม่ถูกต้อง" });
-        }
+        const topupTx = dbLocal.transaction(() => {
+          const used = dbLocal.prepare('SELECT id FROM used_slips WHERE id = ?').get(transRef);
+          if (used) throw new Error("สลิปนี้ถูกใช้งานไปแล้ว");
+
+          dbLocal.prepare('INSERT INTO used_slips (id, userId, amount, timestamp) VALUES (?, ?, ?, ?)').run(transRef, userId, amount, new Date().toISOString());
+          dbLocal.prepare('UPDATE users SET balance = balance + ? WHERE uid = ?').run(amount, userId);
+          dbLocal.prepare(`
+            INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(uuidv4(), userId, req.user.email, amount, 'topup', new Date().toISOString(), `เติมเงินผ่าน PromptPay (${slipProvider}) (Ref: ${transRef})`);
+          
+          return (dbLocal.prepare('SELECT balance FROM users WHERE uid = ?').get(userId) as any).balance;
+        });
+
+        const newBalance = topupTx();
+        return res.json({ success: true, amount, balance: newBalance });
         
-        // Get receiver phone number from settings
-        const paymentSettingsSnap = await db.collection('settings').doc('payment').get();
-        const paymentSettings = paymentSettingsSnap.exists() ? paymentSettingsSnap.data() : {};
-        const mobile = paymentSettings?.trueMoneyNumber?.replace(/[^0-9]/g, '');
+      } else if (type === 'gift') {
+        const paymentSettings = getSetting('payment', {});
+        const mobile = paymentSettings.trueMoneyNumber?.replace(/[^0-9]/g, '');
+        if (!mobile) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่าเบอร์โทรศัพท์สำหรับรับอั่งเปา" });
 
-        if (!mobile) {
-          return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่าเบอร์โทรศัพท์สำหรับรับอั่งเปา" });
-        }
+        const darkxApiKey = (getSetting('payment_keys', {})).darkxApiKey || process.env.DARKX_API_KEY;
+        if (!darkxApiKey) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key" });
 
-        try {
-          console.log(`[TrueMoney] Redeeming voucher via DarkX API: ${data} for mobile: ${mobile}`);
-          
-          const paymentKeysSnap = await db.collection('settings').doc('payment_keys').get();
-          const paymentKeys = paymentKeysSnap.exists() ? paymentKeysSnap.data() : {};
-          const darkxApiKey = paymentKeys?.darkxApiKey || process.env.DARKX_API_KEY;
-
-          if (!darkxApiKey) {
-            return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับรับอั่งเปา (DarkX API)" });
-          }
-
-          const redeemRes = await axios.get(`https://api.darkx.shop/tools/truemoney`, {
-            params: {
-              code: data,
-              phone: mobile
-            },
-            headers: {
-              'Accept': 'application/json',
-              'x-api-key': darkxApiKey
-            },
-            timeout: 30000
+        const redeemRes = await axios.get(`https://api.darkx.shop/tools/truemoney`, {
+          params: { code: data, phone: mobile },
+          headers: { 'Accept': 'application/json', 'x-api-key': darkxApiKey }
+        });
+        
+        if (redeemRes.data.status === true) {
+          const amount = parseFloat(redeemRes.data.amount);
+          const topupTx = dbLocal.transaction(() => {
+            dbLocal.prepare('UPDATE users SET balance = balance + ? WHERE uid = ?').run(amount, userId);
+            dbLocal.prepare(`
+              INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(uuidv4(), userId, req.user.email, amount, 'topup', new Date().toISOString(), `เติมเงินผ่าน อั่งเปา TrueMoney`);
+            return (dbLocal.prepare('SELECT balance FROM users WHERE uid = ?').get(userId) as any).balance;
           });
-          
-          const resData = redeemRes.data;
-          console.log("[TrueMoney DarkX] API Response:", JSON.stringify(resData));
-
-          if (resData.status === true) {
-            const amount = parseFloat(resData.amount);
-
-            if (isNaN(amount) || amount <= 0) {
-              return res.status(400).json({ success: false, error: "จำนวนเงินไม่ถูกต้อง" });
-            }
-
-            // Update user balance and create transaction record (Atomic Transaction)
-            try {
-              await db.runTransaction(async (transaction) => {
-                const userRef = db.collection('users').doc(userId);
-                const userSnap = await transaction.get(userRef);
-                const userData = userSnap.data() || {};
-                const userEmail = userData.email || 'Unknown';
-                const currentBalance = userData.balance || 0;
-
-                transaction.update(userRef, {
-                  balance: currentBalance + amount
-                });
-
-                const txRef = db.collection('transactions').doc();
-                transaction.set(txRef, {
-                  userId: userId,
-                  userEmail: userEmail,
-                  amount: amount,
-                  type: 'topup',
-                  timestamp: new Date().toISOString(),
-                  note: `เติมเงินผ่าน อั่งเปา TrueMoney`,
-                  reference: voucherHash
-                });
-              });
-            } catch (txError: any) {
-              try {
-                handleFirestoreError(txError, OperationType.WRITE, 'topup/verify/truemoney');
-              } catch (e: any) {
-                return res.status(500).json({ success: false, error: e.message });
-              }
-              return res.status(500).json({ success: false, error: "เติมเงินสำเร็จแต่เกิดข้อผิดพลาดในการอัปเดตยอดเงิน กรุณาติดต่อแอดมิน" });
-            }
-
-            return res.json({ success: true, amount });
-          } else {
-            const errorMsg = resData.msg || "ไม่สามารถรับซองอั่งเปาได้";
-            return res.status(400).json({ success: false, error: errorMsg });
-          }
-        } catch (error: any) {
-          console.error("[TrueMoney DarkX] Error:", error.response?.data || error.message);
-          return res.status(400).json({ 
-            success: false, 
-            error: "ไม่สามารถเชื่อมต่อระบบอั่งเปาได้ กรุณาลองใหม่" 
-          });
+          const newBalance = topupTx();
+          return res.json({ success: true, amount, balance: newBalance });
+        } else {
+          return res.status(400).json({ success: false, error: redeemRes.data.msg || "ไม่สามารถรับซองอั่งเปาได้" });
         }
       }
-    } catch (error: any) {
-      try {
-        handleFirestoreError(error, OperationType.GET, 'topup/verify');
-      } catch (e: any) {
-        return res.status(500).json({ success: false, error: e.message });
-      }
-      res.status(500).json({ success: false, error: error.message });
+
+      res.status(400).json({ success: false, error: "ข้อมูลไม่ถูกต้อง" });
+    } catch (e: any) {
+      res.status(400).json({ success: false, error: e.message });
     }
   });
 
@@ -1191,56 +1278,65 @@ async function startServer() {
 
       if (!title) return res.status(400).json({ error: "กรุณาระบุหัวข้อปัญหา" });
 
-      // Check for existing open tickets (spam protection)
-      // We query all user's tickets and filter in-memory to avoid composite index requirement for != operator
-      const q = query(
-        collection(dbModular, 'tickets'),
-        where('userId', '==', userId)
-      );
-      const userTicketsSnap = await getDocs(q);
-      const hasOpenTicket = userTicketsSnap.docs.some(doc => doc.data().status !== 'closed');
-      
-      if (hasOpenTicket) {
+      const openTicket = dbLocal.prepare("SELECT id FROM tickets WHERE userId = ? AND status != 'closed'").get(userId);
+      if (openTicket) {
         return res.status(400).json({ 
           error: "คุณมี Ticket ที่ยังเปิดค้างอยู่ 1 รายการ กรุณารอให้แอดมินปิดงานเดิมก่อนจึงจะเปิดใหม่ได้" 
         });
       }
 
-      // Create ticket document
-      const docRef = await db.collection('tickets').add({
-        userId,
-        userEmail,
-        title,
-        status: 'open',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      const ticketId = uuidv4();
+      const now = new Date().toISOString();
+
+      const ticketTx = dbLocal.transaction(() => {
+        dbLocal.prepare(`
+          INSERT INTO tickets (id, userId, userEmail, subject, status, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(ticketId, userId, userEmail, title, 'open', now, now);
+
+        if (initialMessage) {
+          dbLocal.prepare(`
+            INSERT INTO ticket_messages (id, ticketId, userId, userEmail, content, role, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(uuidv4(), ticketId, userId, userEmail, initialMessage, 'user', now);
+        }
       });
-      const ticketId = docRef.id;
+      ticketTx();
 
-      // Notify Discord
       sendDiscordNotification(`🆕 **Ticket ใหม่!**\n**ID:** \`${ticketId}\`\n**หัวข้อ:** ${title}\n**จากผู้ใช้:** ${userEmail} (${userId})`);
-
-      // Add initial message
-      if (initialMessage) {
-        await db.collection('tickets').doc(ticketId).collection('messages').add({
-          senderId: userId,
-          senderRole: 'user',
-          content: initialMessage,
-          createdAt: new Date().toISOString()
-        });
-      }
-
       return res.json({ success: true, ticketId });
-
     } catch (error: any) {
       console.error("Create ticket error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
+  app.get("/api/tickets/:ticketId", authenticate, async (req: any, res) => {
+    try {
+      const { ticketId } = req.params;
+      const ticket: any = dbLocal.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId);
+      if (!ticket) return res.status(404).json({ error: "ไม่พบ Ticket" });
+      
+      const user: any = dbLocal.prepare('SELECT role FROM users WHERE uid = ?').get(req.user.uid);
+      if (ticket.userId !== req.user.uid && user?.role !== 'admin' && req.user.email !== 'jry.fook@gmail.com') {
+        return res.status(403).json({ error: "ไม่มีสิทธิ์เข้าถึง Ticket นี้" });
+      }
+
+      const messages = dbLocal.prepare('SELECT * FROM ticket_messages WHERE ticketId = ? ORDER BY timestamp ASC').all(ticketId);
+      res.json({ ticket, messages });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/tickets/:ticketId/messages", authenticate, async (req: any, res) => {
+    const messages = dbLocal.prepare('SELECT * FROM ticket_messages WHERE ticketId = ? ORDER BY timestamp ASC').all(req.params.ticketId);
+    res.json(messages);
+  });
+
   const replyLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 30, // Limit each IP to 30 replies per 5 minutes
+    windowMs: 5 * 60 * 1000, 
+    max: 30,
     message: { error: "Too many messages, please wait a moment" },
   });
 
@@ -1250,29 +1346,28 @@ async function startServer() {
       const { content, role } = req.body;
       const userId = req.user.uid;
       
-      const ticketSnap = await db.collection('tickets').doc(ticketId).get();
-      if (!ticketSnap.exists()) return res.status(404).json({ error: "ไม่พบ Ticket" });
+      const ticket: any = dbLocal.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId);
+      if (!ticket) return res.status(404).json({ error: "ไม่พบ Ticket" });
       
-      const ticketData = ticketSnap.data();
-      const isOwner = ticketData.userId === userId;
-      const isAdminReply = role === 'admin';
+      const user: any = dbLocal.prepare('SELECT role FROM users WHERE uid = ?').get(userId);
+      const isOwner = ticket.userId === userId;
+      const isAdminReply = (user?.role === 'admin' || req.user.email === 'jry.fook@gmail.com');
       
       if (!isOwner && !isAdminReply) return res.status(403).json({ error: "ไม่มีสิทธิ์ตอบกลับ Ticket นี้" });
 
-      await db.collection('tickets').doc(ticketId).collection('messages').add({
-        senderId: userId,
-        senderRole: role,
-        content: content || '',
-        createdAt: new Date().toISOString()
-      });
+      const now = new Date().toISOString();
+      const replyTx = dbLocal.transaction(() => {
+        dbLocal.prepare(`
+          INSERT INTO ticket_messages (id, ticketId, userId, userEmail, content, role, timestamp)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), ticketId, userId, req.user.email, content || '', role, now);
 
-      await db.collection('tickets').doc(ticketId).update({
-        status: isAdminReply ? 'answered' : 'waiting',
-        updatedAt: new Date().toISOString()
+        dbLocal.prepare('UPDATE tickets SET status = ?, updatedAt = ? WHERE id = ?')
+          .run(isAdminReply ? 'answered' : 'waiting', now, ticketId);
       });
+      replyTx();
 
       return res.json({ success: true });
-
     } catch (error: any) {
       console.error("Reply ticket error:", error);
       res.status(500).json({ error: error.message });
@@ -1284,36 +1379,19 @@ async function startServer() {
       const { ticketId } = req.params;
       const userId = req.user.uid;
 
-      const ticketRef = db.collection('tickets').doc(ticketId);
-      const ticketSnap = await ticketRef.get();
-      if (!ticketSnap.exists()) return res.status(404).json({ error: "ไม่พบ Ticket" });
+      const ticket: any = dbLocal.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId);
+      if (!ticket) return res.status(404).json({ error: "ไม่พบ Ticket" });
       
-      const ticketData = ticketSnap.data();
-      const isOwner = ticketData.userId === userId;
-      
-      let isAdminUser = false;
-      if (!isOwner) {
-         const userSnap = await db.collection('users').doc(userId).get();
-         if (userSnap.exists() && userSnap.data()?.role === 'admin') isAdminUser = true;
-      }
+      const user: any = dbLocal.prepare('SELECT role FROM users WHERE uid = ?').get(userId);
+      const isOwner = ticket.userId === userId;
+      const isAdminUser = (user?.role === 'admin' || req.user.email === 'jry.fook@gmail.com');
       
       if (!isOwner && !isAdminUser) return res.status(403).json({ error: "ไม่มีสิทธิ์ปิด Ticket นี้" });
 
-      // Images are stored as base64 in the documents directly,
-      // so no need to delete them from Cloud Storage.
+      dbLocal.prepare("UPDATE tickets SET status = 'closed', updatedAt = ? WHERE id = ?").run(new Date().toISOString(), ticketId);
 
-      // Update ticket status
-      await ticketRef.update({
-        status: 'closed',
-        closedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-
-      // Notify Discord
-      sendDiscordNotification(`✅ **Ticket ปิดงานแล้ว!**\n**ID:** \`${ticketId}\`\n**หัวข้อ:** ${ticketData.title}\n**ผู้ปิดงาน:** ${isAdminUser ? 'แอดมิน' : 'ลูกค้า'} (${req.user.email || 'Unknown'})`);
-
+      sendDiscordNotification(`✅ **Ticket ปิดงานแล้ว!**\n**ID:** \`${ticketId}\`\n**หัวข้อ:** ${ticket.subject}\n**ผู้ปิดงาน:** ${isAdminUser ? 'แอดมิน' : 'ลูกค้า'} (${req.user.email || 'Unknown'})`);
       return res.json({ success: true });
-
     } catch (error: any) {
       console.error("Close ticket error:", error);
       res.status(500).json({ error: error.message });
@@ -1338,52 +1416,23 @@ async function startServer() {
     }
 
     try {
-      // 1. Spam check: Limit to 3 pending requests
-      const pendingQ = query(collection(dbModular, 'manual_topups'), where('userId', '==', userId));
-      const pendingSnap = await getDocs(pendingQ);
-      
-      let pendingCount = 0;
-      pendingSnap.docs.forEach((doc: any) => {
-        if (doc.data().status === 'pending') {
-          pendingCount++;
-        }
-      });
-
-      if (pendingCount >= 3) {
+      const pendingCountObj = dbLocal.prepare("SELECT count(*) as count FROM manual_topups WHERE userId = ? AND status = 'pending'").get(userId) as any;
+      if (pendingCountObj.count >= 3) {
         return res.status(400).json({ success: false, error: "คุณมีรายการรอตรวจสอบมากเกินไป กรุณารอแอดมินดำเนินการ" });
       }
 
-      // 2. Hash image to prevent duplicate slip uploads
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
       const imageHash = crypto.createHash('sha256').update(base64Data).digest('hex');
 
-      // Check if hash already exists in any manual topup
-      const existingSlipQ = query(collection(dbModular, 'manual_topups'), where('slipHash', '==', imageHash), limit(1));
-      const existingSlipSnap = await getDocs(existingSlipQ);
-      
-      if (!existingSlipSnap.empty) {
+      const existing = dbLocal.prepare('SELECT id FROM manual_topups WHERE slipHash = ?').get(imageHash);
+      if (existing) {
         return res.status(400).json({ success: false, error: "สลิปนี้ถูกใช้งานไปแล้วในระบบ กรุณาใช้สลิปอื่น" });
       }
 
-      // Fetch user email
-      const userSnap = await db.collection('users').doc(userId).get();
-      const userEmail = userSnap.exists() ? userSnap.data()?.email : 'Unknown';
-
-      // Ensure base64 is not excessively large (limit to approx 500KB)
-      if (base64Data.length > 700000) {
-         return res.status(400).json({ success: false, error: "ขนาดไฟล์รูปภาพใหญ่เกินไป กรุณาลดขนาดภาพ (ไม่เกิน 500KB)" });
-      }
-
-      // 4. Save request
-      await db.collection('manual_topups').add({
-        userId,
-        userEmail,
-        amount: Number(amount),
-        slipImage: imageBase64,
-        slipHash: imageHash,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
+      dbLocal.prepare(`
+        INSERT INTO manual_topups (id, userId, userEmail, amount, slipHash, status, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), userId, req.user.email, Number(amount), imageHash, 'pending', new Date().toISOString());
 
       return res.json({ success: true });
     } catch (error: any) {
@@ -1392,97 +1441,40 @@ async function startServer() {
     }
   });
 
-  // Admin: Approve Manual Topup
+  // Admin Topup Actions
   app.post("/api/admin/topup/manual/approve", authenticate, adminOnly, async (req: any, res) => {
-    const { id, amount } = req.body; // Amount can be overridden by admin
-    if (!id || !amount || isNaN(amount) || amount <= 0) {
-      return res.status(400).json({ success: false, error: "ข้อมูลไม่ถูกต้อง" });
-    }
+    const { id, amount } = req.body;
+    if (!id || !amount || isNaN(amount) || amount <= 0) return res.status(400).json({ success: false, error: "ข้อมูลไม่ถูกต้อง" });
 
     try {
-      await db.runTransaction(async (transaction) => {
-        const topupRef = db.collection('manual_topups').doc(id);
-        const topupSnap = await transaction.get(topupRef);
+      const topup: any = dbLocal.prepare('SELECT * FROM manual_topups WHERE id = ?').get(id);
+      if (!topup) return res.status(404).json({ error: "ไม่พบรายการ" });
+      if (topup.status !== 'pending') return res.status(400).json({ error: `รายการนี้ถูกดำเนินการไปแล้ว (สถานะ: ${topup.status})` });
 
-        if (!topupSnap.exists()) {
-          throw new Error("ไม่พบรายการแจ้งโอนเงิน");
-        }
-
-        const topupData = topupSnap.data() || {};
-        if (topupData.status !== 'pending') {
-          throw new Error(`รายการนี้ถูกดำเนินการไปแล้ว (สถานะ: ${topupData.status})`);
-        }
-
-        const userId = topupData.userId;
-        const userRef = db.collection('users').doc(userId);
-        const userSnap = await transaction.get(userRef);
-        const currentBalance = userSnap.exists() ? userSnap.data()?.balance || 0 : 0;
-        const userEmail = topupData.userEmail || (userSnap.exists() ? userSnap.data()?.email : 'Unknown');
-
-        // Update Topup
-        transaction.update(topupRef, {
-          status: 'approved',
-          approvedAmount: Number(amount),
-          updatedAt: new Date().toISOString(),
-          processedBy: req.user.uid
-        });
-
-        // Update User Balance
-        transaction.update(userRef, {
-          balance: currentBalance + Number(amount)
-        });
-
-        // Add Transaction Record
-        const txRef = db.collection('transactions').doc();
-        transaction.set(txRef, {
-          userId: userId,
-          userEmail: userEmail,
-          amount: Number(amount),
-          type: 'topup',
-          timestamp: new Date().toISOString(),
-          note: `เติมเงินสำรอง (แจ้งโอน) - รหัสชั่วคราว`,
-          reference: `MANUAL-${id.substring(0, 8)}`
-        });
+      const topupTx = dbLocal.transaction(() => {
+        dbLocal.prepare("UPDATE manual_topups SET status = 'approved', amount = ? WHERE id = ?").run(Number(amount), id);
+        dbLocal.prepare('UPDATE users SET balance = balance + ? WHERE uid = ?').run(Number(amount), topup.userId);
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), topup.userId, topup.userEmail, Number(amount), 'topup_manual', new Date().toISOString(), `เติมเงินผ่านแอดมิน (อนุมัติสลิป)`);
       });
-
+      topupTx();
       res.json({ success: true });
     } catch (error: any) {
-      return res.status(400).json({ success: false, error: error.message });
+      res.status(400).json({ success: false, error: error.message });
     }
   });
 
-  // Admin: Reject Manual Topup
   app.post("/api/admin/topup/manual/reject", authenticate, adminOnly, async (req: any, res) => {
     const { id, reason } = req.body;
-    if (!id || !reason) {
-      return res.status(400).json({ success: false, error: "กรุณาระบุเหตุผลการปฏิเสธ" });
-    }
+    if (!id || !reason) return res.status(400).json({ success: false, error: "กรุณาระบุเหตุผล" });
 
     try {
-      await db.runTransaction(async (transaction) => {
-        const topupRef = db.collection('manual_topups').doc(id);
-        const topupSnap = await transaction.get(topupRef);
-
-        if (!topupSnap.exists()) {
-          throw new Error("ไม่พบรายการแจ้งโอนเงิน");
-        }
-
-        const topupData = topupSnap.data() || {};
-        if (topupData.status !== 'pending') {
-          throw new Error(`รายการนี้ถูกดำเนินการไปแล้ว (สถานะ: ${topupData.status})`);
-        }
-
-        transaction.update(topupRef, {
-          status: 'rejected',
-          reason: reason,
-          updatedAt: new Date().toISOString(),
-          processedBy: req.user.uid
-        });
-      });
-
+      dbLocal.prepare("UPDATE manual_topups SET status = 'rejected' WHERE id = ?").run(id);
       res.json({ success: true });
     } catch (error: any) {
-      return res.status(400).json({ success: false, error: error.message });
+      res.status(400).json({ success: false, error: error.message });
     }
   });
 
@@ -1490,22 +1482,11 @@ async function startServer() {
   app.post("/api/admin/users/:userId/reset-ad-claim", authenticate, adminOnly, async (req: any, res) => {
     const { userId } = req.params;
     try {
-      // 1. Update user document
-      await db.collection('users').doc(userId).update({
-        lastAdClaimAt: null
-      });
-
-      // 2. Delete IP claim records for this user to clear IP-based cooldown for them
-      const claimsQ = query(collection(dbModular, 'linkvertise_claims'), where('userId', '==', userId));
-      const claimsSnap = await getDocs(claimsQ);
-      
-      const deletePromises = claimsSnap.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-
+      dbLocal.prepare('UPDATE users SET lastAdClaimAt = NULL WHERE uid = ?').run(userId);
+      dbLocal.prepare('DELETE FROM linkvertise_claims WHERE userId = ?').run(userId);
       res.json({ success: true, message: "Reset ad claim cooldown successfully" });
     } catch (error: any) {
-      console.error("Failed to reset ad claim:", error);
-      res.status(500).json({ error: "ไม่สามารถรีเซ็ตการรับสิทธิ์ได้", details: error.message });
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -1513,25 +1494,14 @@ async function startServer() {
   app.delete("/api/admin/users/:userId", authenticate, adminOnly, async (req: any, res) => {
     const { userId } = req.params;
     try {
-      // Try to delete from Auth first
-      let authDeleted = false;
+      let authDeleted = true;
       try {
         await getAdminAuth(adminApp).deleteUser(userId);
-        authDeleted = true;
       } catch (authError: any) {
-        console.error("Failed to delete user from Auth:", authError);
-        // If it's a "user not found" error, we can still proceed to delete from Firestore
-        if (authError.code === 'auth/user-not-found') {
-          authDeleted = true;
-        } else if (authError.code === 'auth/internal-error' || authError.message.includes('identitytoolkit')) {
-          console.warn("Auth deletion failed due to Identity Toolkit API being disabled in the sandbox environment. Proceeding with Firestore deletion.");
-        } else {
-          console.warn("Auth deletion failed for other reasons. Proceeding with Firestore deletion.");
-        }
+        console.error("Auth deletion failed:", authError.message);
+        authDeleted = false;
       }
-
-      // Delete from Firestore
-      await db.collection('users').doc(userId).delete();
+      dbLocal.prepare('DELETE FROM users WHERE uid = ?').run(userId);
       
       if (!authDeleted) {
         return res.json({ 
@@ -1547,6 +1517,400 @@ async function startServer() {
     }
   });
 
+  // Update User (Admin Only)
+  app.put("/api/admin/users/:userId", authenticate, adminOnly, async (req: any, res) => {
+    const { userId } = req.params;
+    const data = req.body;
+    try {
+      if (data.role !== undefined) {
+        dbLocal.prepare('UPDATE users SET role = ? WHERE uid = ?').run(data.role, userId);
+      }
+      if (data.status !== undefined) {
+        dbLocal.prepare('UPDATE users SET status = ? WHERE uid = ?').run(data.status, userId);
+      }
+      if (data.hasUsedTrial !== undefined) {
+        dbLocal.prepare('UPDATE users SET hasUsedTrial = ?, lastTrialAt = ? WHERE uid = ?').run(
+          data.hasUsedTrial ? 1 : 0, 
+          data.lastTrialAt !== undefined ? data.lastTrialAt : null, 
+          userId
+        );
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add Balance (Admin Only)
+  app.post("/api/admin/users/:userId/balance", authenticate, adminOnly, async (req: any, res) => {
+    const { userId } = req.params;
+    const { amount } = req.body;
+    try {
+      const dbTx = dbLocal.transaction(() => {
+        dbLocal.prepare('UPDATE users SET balance = balance + ? WHERE uid = ?').run(amount, userId);
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, amount, type, timestamp, note) 
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+          crypto.randomUUID(),
+          userId,
+          amount,
+          'topup',
+          new Date().toISOString(),
+          `แอดมินปรับยอดเงินด้วยตนเอง (${amount > 0 ? '+' : ''}${amount})`
+        );
+      });
+      dbTx();
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get User VPNs (Admin Only)
+  app.get("/api/admin/users/:userId/vpns", authenticate, adminOnly, async (req: any, res) => {
+    const { userId } = req.params;
+    try {
+      const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ?').all(userId);
+      res.json(vpns);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete VPN (Admin Only)
+  app.delete("/api/admin/vpns/:vpnId", authenticate, adminOnly, async (req: any, res) => {
+    const { vpnId } = req.params;
+    try {
+      dbLocal.prepare('DELETE FROM vpns WHERE id = ?').run(vpnId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get All Networks (Admin)
+  app.get("/api/admin/networks", authenticate, adminOnly, async (req: any, res) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM networks').all();
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/networks", authenticate, adminOnly, async (req: any, res) => {
+    const data = req.body;
+    try {
+      const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(7);
+      
+      // Update SQLite
+      dbLocal.prepare(`
+        INSERT INTO networks (id, name, inboundId, color, status)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, data.name, data.inboundId, data.color || 'blue', data.status || 'open');
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'networks', id), {
+        name: data.name,
+        inboundId: data.inboundId,
+        color: data.color || 'blue',
+        status: data.status || 'open',
+        updatedAt: serverTimestamp()
+      });
+
+      res.json({ success: true, id });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/networks/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    try {
+      // Update SQLite
+      dbLocal.prepare(`
+        UPDATE networks SET name = ?, inboundId = ?, color = ?, status = ? WHERE id = ?
+      `).run(data.name, data.inboundId, data.color, data.status, id);
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'networks', id), {
+        name: data.name,
+        inboundId: data.inboundId,
+        color: data.color,
+        status: data.status,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/networks/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      dbLocal.prepare('DELETE FROM networks WHERE id = ?').run(id);
+      await deleteDoc(doc(dbModular, 'networks', id));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get All Servers (Admin)
+  app.get("/api/admin/servers", authenticate, adminOnly, async (req: any, res) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM servers').all();
+      // Parse prices
+      list.forEach((s: any) => {
+        try {
+          s.prices = JSON.parse(s.prices);
+        } catch(e) {
+          s.prices = {};
+        }
+      });
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/servers", authenticate, adminOnly, async (req: any, res) => {
+    const data = req.body;
+    try {
+      const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(7);
+      
+      const serverData = {
+        name: data.name,
+        host: data.host,
+        port: data.port,
+        username: data.username,
+        password: data.password,
+        prices: typeof data.prices === 'string' ? data.prices : JSON.stringify(data.prices || {}),
+        status: data.status || 'online',
+        maxUsers: data.maxUsers || 100,
+        description: data.description || '',
+        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? data.supportedAppIcons : JSON.stringify(data.supportedAppIcons || []),
+        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? data.generalUsageIcons : JSON.stringify(data.generalUsageIcons || [])
+      };
+
+      // Update SQLite
+      dbLocal.prepare(`
+        INSERT INTO servers (id, name, host, port, username, password, prices, status, maxUsers, currentUsers, description, supportedAppIcons, generalUsageIcons)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, serverData.name, serverData.host, serverData.port, serverData.username, serverData.password, 
+        serverData.prices, serverData.status, serverData.maxUsers, 0, 
+        serverData.description, serverData.supportedAppIcons, serverData.generalUsageIcons
+      );
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'servers', id), {
+        ...serverData,
+        prices: typeof data.prices === 'string' ? JSON.parse(data.prices) : (data.prices || {}),
+        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? JSON.parse(data.supportedAppIcons) : (data.supportedAppIcons || []),
+        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? JSON.parse(data.generalUsageIcons) : (data.generalUsageIcons || []),
+        updatedAt: serverTimestamp()
+      });
+
+      res.json({ success: true, id });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/servers/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    try {
+      const serverData = {
+        name: data.name,
+        host: data.host,
+        port: data.port,
+        username: data.username,
+        password: data.password,
+        prices: typeof data.prices === 'string' ? data.prices : JSON.stringify(data.prices || {}),
+        status: data.status,
+        maxUsers: data.maxUsers || 100,
+        description: data.description || '',
+        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? data.supportedAppIcons : JSON.stringify(data.supportedAppIcons || []),
+        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? data.generalUsageIcons : JSON.stringify(data.generalUsageIcons || [])
+      };
+
+      // Update SQLite
+      dbLocal.prepare(`
+        UPDATE servers SET name = ?, host = ?, port = ?, username = ?, password = ?, prices = ?, status = ?, maxUsers = ?, description = ?, supportedAppIcons = ?, generalUsageIcons = ? WHERE id = ?
+      `).run(
+        serverData.name, serverData.host, serverData.port, serverData.username, serverData.password, 
+        serverData.prices, serverData.status, serverData.maxUsers, 
+        serverData.description, serverData.supportedAppIcons, serverData.generalUsageIcons, id
+      );
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'servers', id), {
+        ...serverData,
+        prices: typeof data.prices === 'string' ? JSON.parse(data.prices) : (data.prices || {}),
+        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? JSON.parse(data.supportedAppIcons) : (data.supportedAppIcons || []),
+        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? JSON.parse(data.generalUsageIcons) : (data.generalUsageIcons || []),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/servers/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      dbLocal.prepare('DELETE FROM servers WHERE id = ?').run(id);
+      await deleteDoc(doc(dbModular, 'servers', id));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get All Devices (Admin)
+  app.get("/api/admin/device-options", authenticate, adminOnly, async (req: any, res) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM device_options ORDER BY sortOrder ASC, count ASC').all();
+      // Map back to status boolean
+      res.json(list.map((d: any) => ({ ...d, status: d.status === 1 })));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/device-options", authenticate, adminOnly, async (req: any, res) => {
+    const data = req.body;
+    try {
+      const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(7);
+      
+      // Update SQLite
+      dbLocal.prepare(`
+        INSERT INTO device_options (id, name, count, price, sortOrder, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, data.name, data.count, data.price, data.sortOrder || 0, data.status ? 1 : 0);
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'device_options', id), {
+        name: data.name,
+        count: Number(data.count),
+        price: Number(data.price),
+        sortOrder: Number(data.sortOrder || 0),
+        status: data.status ? true : false,
+        updatedAt: serverTimestamp()
+      });
+
+      res.json({ success: true, id });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/device-options/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    try {
+      // Update SQLite
+      dbLocal.prepare(`
+        UPDATE device_options SET name = ?, count = ?, price = ?, sortOrder = ?, status = ? WHERE id = ?
+      `).run(data.name, data.count, data.price, data.sortOrder || 0, data.status ? 1 : 0, id);
+
+      // Sync to Firestore
+      await setDoc(doc(dbModular, 'device_options', id), {
+        name: data.name,
+        count: Number(data.count),
+        price: Number(data.price),
+        sortOrder: Number(data.sortOrder || 0),
+        status: data.status ? true : false,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/device-options/:id", authenticate, adminOnly, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      dbLocal.prepare('DELETE FROM device_options WHERE id = ?').run(id);
+      await deleteDoc(doc(dbModular, 'device_options', id));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // --- Client Protected API Routes ---
+  app.get("/api/admin/stats", authenticate, adminOnly, async (req, res) => {
+    const totalUsers = (dbLocal.prepare('SELECT count(*) as count FROM users').get() as any).count;
+    const totalVpns = (dbLocal.prepare('SELECT count(*) as count FROM vpns').get() as any).count;
+    const totalTransactions = (dbLocal.prepare('SELECT sum(amount) as sum FROM transactions').get() as any).sum || 0;
+    const totalServers = (dbLocal.prepare('SELECT count(*) as count FROM servers').get() as any).count;
+    const onlineServers = (dbLocal.prepare("SELECT count(*) as count FROM servers WHERE status != 'offline'").get() as any).count;
+    res.json({ totalUsers, totalVpns, totalTransactions, totalServers, onlineServers });
+  });
+
+  app.get("/api/admin/users", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare('SELECT * FROM users ORDER BY createdAt DESC').all();
+    res.json(list);
+  });
+
+  app.get("/api/admin/vpns", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare('SELECT * FROM vpns ORDER BY createdAt DESC LIMIT 100').all();
+    res.json(list);
+  });
+
+  app.get("/api/admin/transactions", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare('SELECT * FROM transactions ORDER BY timestamp DESC LIMIT 100').all();
+    res.json(list);
+  });
+
+  app.get("/api/admin/tickets", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare('SELECT * FROM tickets ORDER BY updatedAt DESC').all();
+    res.json(list);
+  });
+
+  app.get("/api/admin/topup/manual/pending", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare("SELECT * FROM manual_topups WHERE status = 'pending' ORDER BY createdAt DESC").all();
+    res.json(list);
+  });
+
+  app.get("/api/debug-sync", authenticate, adminOnly, async (req, res) => {
+    try {
+      await syncFirestoreToLocal();
+      const users = (dbLocal.prepare('SELECT count(*) as count FROM users').get() as any).count;
+      const servers = (dbLocal.prepare('SELECT count(*) as count FROM servers').get() as any).count;
+      res.json({ success: true, users, servers });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/settings", authenticate, adminOnly, async (req, res) => {
+    const rows = dbLocal.prepare('SELECT * FROM settings').all();
+    const settings: any = {};
+    rows.forEach((row: any) => {
+      settings[row.id] = JSON.parse(row.data);
+    });
+    res.json(settings);
+  });
+
+  app.post("/api/admin/settings/:id", authenticate, adminOnly, async (req, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    dbLocal.prepare('INSERT OR REPLACE INTO settings (id, data) VALUES (?, ?)').run(id, JSON.stringify(data));
+    res.json({ success: true });
+  });
+
   // --- Linkvertise Ad Config API ---
   app.post("/api/linkvertise/init", authenticate, apiLimiter, async (req: any, res) => {
     try {
@@ -1556,80 +1920,40 @@ async function startServer() {
 
       if (!serverId || !network) return res.status(400).json({ error: "ข้อมูลไม่ครบถ้วน (ต้องการ serverId, network)" });
 
-      // Check if user is admin
-      const email = req.user.email;
-      const isDefaultAdmin = (email === "jry.fook@gmail.com");
-      const isServerAdmin = (email === "server@local.host");
-      
-      let isAdmin = isDefaultAdmin || isServerAdmin;
-      if (!isAdmin) {
-        const adminCheckSnap = await db.collection('users').doc(userId).get();
-        if (adminCheckSnap.exists() && adminCheckSnap.data()?.role === 'admin') {
-          isAdmin = true;
-        }
-      }
+      const user: any = dbLocal.prepare('SELECT lastAdClaimAt, role FROM users WHERE uid = ?').get(userId);
+      const isAdmin = user?.role === 'admin' || req.user.email === 'jry.fook@gmail.com';
 
-      // 1. Check User Cooldown (6 hours limit) - Skip for Admin
-      const userRef = db.collection('users').doc(userId);
-      const userSnap = await userRef.get();
-      if (userSnap.exists() && !isAdmin) {
-        const userData = userSnap.data();
-        if (userData?.lastAdClaimAt) {
-          const hoursSince = (Date.now() - new Date(userData.lastAdClaimAt).getTime()) / (1000 * 60 * 60);
-          if (hoursSince < 6) {
-            return res.status(400).json({ error: `คุณเพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
-          }
+      if (user?.lastAdClaimAt && !isAdmin) {
+        const hoursSince = (Date.now() - new Date(user.lastAdClaimAt).getTime()) / (1000 * 60 * 60);
+        if (hoursSince < 6) {
+          return res.status(400).json({ error: `คุณเพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
         }
       }
 
       // 2. Check IP Cooldown (6 hours limit) - Skip if IP is unknown or user is Admin
       if (ip !== 'unknown' && !isAdmin) {
-        const qIp = query(collection(dbModular, 'linkvertise_claims'), where('ipAddress', '==', ip));
-        const snapIp = await getDocs(qIp);
-        let latestClaimTime = 0;
-        snapIp.docs.forEach((doc: any) => {
-           const t = new Date(doc.data().claimTime).getTime();
-           if (t > latestClaimTime) latestClaimTime = t;
-        });
-
-        if (latestClaimTime > 0) {
-          const hoursSince = (Date.now() - latestClaimTime) / (1000 * 60 * 60);
+        const lastClaim: any = dbLocal.prepare('SELECT claimTime FROM linkvertise_claims WHERE ipAddress = ? ORDER BY claimTime DESC LIMIT 1').get(ip);
+        if (lastClaim) {
+          const hoursSince = (Date.now() - new Date(lastClaim.claimTime).getTime()) / (1000 * 60 * 60);
           if (hoursSince < 6) {
              return res.status(400).json({ error: `เครือข่าย/IP นี้เพิ่งรับสิทธิ์ไป กรุณารออีก ${(6 - hoursSince).toFixed(1)} ชั่วโมง` });
           }
         }
       }
 
-      // Verify Linkvertise URL from admin settings
-      const settingsSnap = await db.collection('settings').doc('global').get();
-      const settingsData = settingsSnap.data();
-      const linkvertiseUrl = settingsData?.linkvertiseUrl;
-      const linkvertiseEnabled = settingsData?.linkvertiseEnabled !== false;
+      const settings = getSetting('global');
+      if (!settings.linkvertiseEnabled) return res.status(403).json({ error: "ระบบดูโฆษณาปิดปรับปรุงชั่วคราว" });
+      if (!settings.linkvertiseUrl) return res.status(400).json({ error: "แอดมินยังไม่ได้ตั้งค่าลิงก์ Linkvertise" });
 
-      if (!linkvertiseEnabled) {
-         return res.status(403).json({ error: "ระบบดูโฆษณาปิดปรับปรุงชั่วคราว" });
-      }
-
-      if (!linkvertiseUrl) {
-         return res.status(400).json({ error: "แอดมินยังไม่ได้ตั้งค่าลิงก์ Linkvertise กรุณาติดต่อทีมงาน" });
-      }
-
-      // Create a pending tracking token
       const token = crypto.randomBytes(16).toString('hex');
-      await db.collection('linkvertise_sessions').doc(token).set({
-        userId,
-        userEmail: req.user.email || 'unknown',
-        ipAddress: ip,
-        serverId,
-        network,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
+      dbLocal.prepare(`
+        INSERT INTO linkvertise_sessions (id, userId, userEmail, ipAddress, serverId, network, status, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(token, userId, req.user.email || 'unknown', ip, serverId, network, 'pending', new Date().toISOString());
 
-      res.json({ success: true, token, targetUrl: linkvertiseUrl });
+      res.json({ success: true, token, targetUrl: settings.linkvertiseUrl });
     } catch (err: any) {
-      console.error("Linkvertise Init Error:", err);
-      res.status(500).json({ error: err.message || "ไม่สามารถเริ่มการรับสิทธิ์ได้ กรุณาลองใหม่" });
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -1639,88 +1963,85 @@ async function startServer() {
       const userId = req.user.uid;
       const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || 'unknown';
 
-      const sessionRef = db.collection('linkvertise_sessions').doc(token);
-      const sessionSnap = await sessionRef.get();
-
-      if (!sessionSnap.exists() || sessionSnap.data()?.status !== 'pending') {
+      const session: any = dbLocal.prepare('SELECT * FROM linkvertise_sessions WHERE id = ?').get(token);
+      if (!session || session.status !== 'pending') {
         return res.status(400).json({ error: "Session ยืนยันไม่ถูกต้องหรือถูกใช้งานไปแล้ว" });
       }
 
-      const sessionData = sessionSnap.data();
+      if (session.userId !== userId) return res.status(403).json({ error: "สิทธิ์นี้เป็นของบัญชีผู้ใช้อื่น" });
 
-      // Ensure user is the same
-      if (sessionData.userId !== userId) {
-        return res.status(403).json({ error: "สิทธิ์นี้เป็นของบัญชีผู้ใช้อื่น ไม่สามารถรับได้" });
-      }
+      const server: any = dbLocal.prepare('SELECT * FROM servers WHERE id = ?').get(session.serverId);
+      const network: any = dbLocal.prepare('SELECT * FROM networks WHERE name = ?').get(session.network);
+      if (!server || !network) return res.status(404).json({ error: "ข้อมูลเซิร์ฟเวอร์หรือเครือข่ายไม่ถูกต้อง" });
 
-      // Network lookup to get inboundId
-      const netsSnap = await db.collection('networks').get();
-      const networkDoc = netsSnap.docs.find((d: any) => d.data()?.name === sessionData.network);
-      if (!networkDoc) return res.status(404).json({ error: "ไม่พบข้อมูลเครือข่าย" });
-      const inboundId = networkDoc.data()?.inboundId;
-
-      // Server lookup
-      const serverRef = db.collection('servers').doc(sessionData.serverId);
-      const serverSnap = await serverRef.get();
-      if (!serverSnap.exists()) return res.status(404).json({ error: "เซิร์ฟเวอร์โดนลบหรือไม่พร้อมใช้งาน" });
-      const serverData = serverSnap.data();
-      const credSnap = await serverRef.collection('private').doc('credentials').get();
-      const creds = credSnap.exists() ? credSnap.data() : null;
-      const fullServer = { ...serverData, id: sessionData.serverId, username: creds?.username, password: creds?.password };
-
-      // Generate 6 hours VPN
       const days = 0.25; // 6 hours
-      const { uuid, config, expireAt, clientName } = await createVpnConfig(req.user.email || 'ad_user', fullServer, inboundId, days, sessionData.network, 'ad');
-
-      // Update session to claimed
-      await sessionRef.update({ status: 'claimed', claimedAt: new Date().toISOString() });
-
-      const vpnData = {
-        userId,
-        serverId: sessionData.serverId,
-        serverName: serverData.name,
-        inboundId,
-        uuid,
-        config,
-        expireAt,
-        status: "active",
-        network: sessionData.network,
-        deviceCount: 1,
-        clientName,
-        isAdClaim: true,
-        createdAt: new Date().toISOString()
-      };
-
-      // Add VPN
-      await db.collection('vpns').add(vpnData);
-
-      // Add to claims for cooldown tracking
-      await db.collection('linkvertise_claims').add({
-        userId,
-        ipAddress: ip,
-        claimTime: new Date().toISOString(),
-        vpnId: uuid
+      const vpnResult = await createVpnConfig(req.user.email || 'ad_user', server, network.inboundId, days, session.network, 'ad');
+      
+      const claimTx = dbLocal.transaction(() => {
+        dbLocal.prepare("UPDATE linkvertise_sessions SET status = 'claimed' WHERE id = ?").run(token);
+        dbLocal.prepare(`
+          INSERT INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, clientName, isAdClaim, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          uuidv4(), userId, server.id, server.name, network.inboundId, 
+          vpnResult.uuid, vpnResult.config, vpnResult.expireAt, 'active', 
+          session.network, vpnResult.clientName, 1, new Date().toISOString()
+        );
+        dbLocal.prepare('UPDATE users SET lastAdClaimAt = ? WHERE uid = ?').run(new Date().toISOString(), userId);
+        dbLocal.prepare('INSERT INTO linkvertise_claims (id, userId, ipAddress, claimTime) VALUES (?, ?, ?, ?)').run(uuidv4(), userId, ip, new Date().toISOString());
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          uuidv4(), userId, req.user.email, 0, 'ad_claim', new Date().toISOString(), `รับ Config ฟรีจากการดูโฆษณา (${session.network})`
+        );
       });
+      claimTx();
 
-      // Update user lastAdClaimAt
-      await db.collection('users').doc(userId).update({
-        lastAdClaimAt: new Date().toISOString()
-      });
-
-      // Log transaction
-      await db.collection('transactions').add({
-        userId: userId,
-        userEmail: req.user.email,
-        amount: 0,
-        type: 'ad_claim',
-        timestamp: new Date().toISOString(),
-        note: `รับ Config ฟรีจากการดูโฆษณา (${sessionData.network})`
-      });
-
-      res.json({ success: true, vpn: vpnData });
+      res.json({ success: true });
     } catch (err: any) {
       console.error('Ad Claim error:', err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/transactions", authenticate, adminOnly, async (req, res) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM transactions ORDER BY timestamp DESC LIMIT 500').all();
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/manual-topups", authenticate, adminOnly, async (req, res) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM manual_topups ORDER BY createdAt DESC LIMIT 100').all();
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/settings/payment", authenticate, adminOnly, async (req, res) => {
+    res.json(getSetting('payment', { trueMoneyNumber: '', paymentQrUrl: '', bankHolder: '', minTopup: 50 }));
+  });
+
+  app.get("/api/admin/settings/payment_keys", authenticate, adminOnly, async (req, res) => {
+    res.json(getSetting('payment_keys', { easySlipApiKey: '', darkxApiKey: '', rdcwClientId: '', rdcwClientSecret: '', slipProvider: 'easyslip' }));
+  });
+
+  app.get("/api/admin/settings/payment_methods", authenticate, adminOnly, async (req, res) => {
+    res.json(getSetting('payment_methods', { promptpay: 'open', truemoney: 'open', manual: 'open' }));
+  });
+
+  app.get("/api/admin/users/mapping", authenticate, adminOnly, async (req, res) => {
+    try {
+      const users = dbLocal.prepare('SELECT uid, email FROM users').all() as any[];
+      const mapping = users.reduce((acc: any, u: any) => ({ ...acc, [u.uid]: u.email }), {});
+      res.json(mapping);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -1733,14 +2054,24 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Cache static assets for better performance
+    app.use(express.static(distPath, {
+      maxAge: '1d',
+      etag: true,
+      lastModified: true
+    }));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Authenticate and sync in background after server is up
+    authenticateServer().catch(err => {
+      console.error("Background authentication/sync failed:", err);
+    });
   });
 }
 

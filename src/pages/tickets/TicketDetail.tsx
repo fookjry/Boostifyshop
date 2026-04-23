@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, collection, query, orderBy, onSnapshot, getDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebase';
 import axios from 'axios';
 import { MessageSquare, ArrowLeft, Send, X, Loader2, AlertCircle, Clock, CheckCircle2, ShieldCheck, User } from 'lucide-react';
 
@@ -19,33 +17,28 @@ export function TicketDetail({ user, profile }: { user: any, profile: any }) {
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!id) return;
-    
-    const unsubTicket = onSnapshot(doc(db, 'tickets', id), (doc) => {
-      if (doc.exists()) {
-        setTicket({ id: doc.id, ...doc.data() });
-      } else {
-        navigate('/tickets');
-      }
-    });
-
-    const q = query(
-      collection(db, 'tickets', id, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
-    const unsubMsg = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const fetchTicketData = async () => {
+    try {
+      const res = await axios.get(`/api/tickets/${id}`);
+      setTicket(res.data.ticket);
+      setMessages(res.data.messages);
       setLoading(false);
+      
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    });
+    } catch (err: any) {
+      console.error('Failed to fetch ticket data:', err);
+      if (err.response?.status === 404) navigate('/tickets');
+      setLoading(false);
+    }
+  };
 
-    return () => {
-      unsubTicket();
-      unsubMsg();
-    };
+  useEffect(() => {
+    if (!id) return;
+    fetchTicketData();
+    const interval = setInterval(fetchTicketData, 5000); // Poll every 5s for chat-like experience
+    return () => clearInterval(interval);
   }, [id, navigate]);
 
   const handleReply = async (e: React.FormEvent) => {
@@ -114,7 +107,7 @@ export function TicketDetail({ user, profile }: { user: any, profile: any }) {
             <ArrowLeft className="w-5 h-5 text-slate-300" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-xl font-black text-white tracking-tight drop-shadow-md truncate">{ticket.title}</h1>
+            <h1 className="text-xl font-black text-white tracking-tight drop-shadow-md truncate">{ticket.subject}</h1>
             <p className="text-xs text-slate-400 font-mono">Ticket #{ticket.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
@@ -158,8 +151,8 @@ export function TicketDetail({ user, profile }: { user: any, profile: any }) {
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto pr-2 pb-4 space-y-6 no-scrollbar">
         {messages.map((msg, idx) => {
-          const isMe = msg.senderId === user.uid;
-          const msgRole = msg.senderRole;
+          const isMe = msg.userId === user.uid;
+          const msgRole = msg.role;
           const isSystemInfo = isAdmin && msgRole === 'user'; // If admin looking at user msg
           
           return (
@@ -170,7 +163,7 @@ export function TicketDetail({ user, profile }: { user: any, profile: any }) {
                 ) : (
                   <><User className="w-3 h-3 text-blue-400" /><span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{isMe ? 'Me' : ticket.userEmail}</span></>
                 )}
-                <span className="text-[10px] text-slate-500 font-mono">{new Date(msg.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[10px] text-slate-500 font-mono">{new Date(msg.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               
               <div className={`max-w-[85%] rounded-2xl p-4 ${isMe ? 'bg-blue-600/20 border border-blue-500/30 text-white rounded-tr-sm' : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-sm'}`}>
@@ -216,7 +209,7 @@ export function TicketDetail({ user, profile }: { user: any, profile: any }) {
         <div className="flex-shrink-0 glass-panel p-4 text-center">
           <p className="text-sm text-slate-400 font-bold bg-white/5 py-3 rounded-xl border border-white/10 flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            Ticket นี้ถูกปิดเรียบร้อยแล้วเมื่อ {new Date(ticket.closedAt).toLocaleString('th-TH')}
+            Ticket นี้ถูกปิดเรียบร้อยแล้วเมื่อ {new Date(ticket.updatedAt).toLocaleString('th-TH')}
           </p>
         </div>
       )}

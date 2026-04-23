@@ -1,19 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import React from 'react';
 import { Megaphone } from 'lucide-react';
 
-export function AnnouncementBar() {
-  const [announcement, setAnnouncement] = useState('');
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        setAnnouncement(doc.data().announcement || '');
-      }
-    });
-    return () => unsub();
-  }, []);
+export function AnnouncementBar({ settings }: { settings: any }) {
+  const announcement = settings?.announcement || '';
 
   if (!announcement) return null;
 

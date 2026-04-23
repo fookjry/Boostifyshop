@@ -36,46 +36,29 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   };
 
   useEffect(() => {
-    const path = 'servers';
-    const unsubscribe = onSnapshot(collection(db, path), (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setServers(list);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
-
-    const unsubNetworks = onSnapshot(collection(db, 'networks'), (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setNetworks(list.filter((n: any) => n.status === 'open'));
-    });
-
-    const unsubDeviceOptions = onSnapshot(collection(db, 'device_options'), (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      const activeOptions = list.filter((o: any) => o.status === true).sort((a: any, b: any) => a.sortOrder - b.sortOrder);
-      setDeviceOptions(activeOptions);
-      if (activeOptions.length > 0) {
-        setDeviceCount(activeOptions[0].count);
+    const fetchData = async () => {
+      try {
+        const [serversRes, networksRes, deviceOptionsRes, vpnsRes, globalRes] = await Promise.all([
+          axios.get('/api/servers'),
+          axios.get('/api/networks'),
+          axios.get('/api/device-options'),
+          axios.get('/api/my-vpns'),
+          axios.get('/api/settings/global')
+        ]);
+        setServers(serversRes.data);
+        setNetworks(networksRes.data.filter((n: any) => n.status === 'open' || n.status === 'active'));
+        setDeviceOptions(deviceOptionsRes.data);
+        if (deviceOptionsRes.data.length > 0) {
+          setDeviceCount(deviceOptionsRes.data[0].count);
+        }
+        setVpns(vpnsRes.data);
+        setLinkvertiseEnabled(globalRes.data.linkvertiseEnabled !== false);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
       }
-    });
-
-    // Load user's VPNs for dashboard/config
-    const unsubVpns = onSnapshot(query(collection(db, 'vpns'), where('userId', '==', user.uid)), (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVpns(list);
-    });
-
-    const unsubGlobal = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        setLinkvertiseEnabled(doc.data().linkvertiseEnabled !== false);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      unsubNetworks();
-      unsubVpns();
-      unsubGlobal();
     };
+
+    fetchData();
   }, []);
 
   const handlePurchase = async () => {
@@ -298,7 +281,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
                   <div className="flex flex-col gap-3">
                     {/* Supported Apps */}
-                    {s.supportedAppIcons && s.supportedAppIcons.filter(Boolean).length > 0 && (
+                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter(Boolean).length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">Supported Apps</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
@@ -312,7 +295,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                     )}
 
                     {/* General Usage */}
-                    {s.generalUsageIcons && s.generalUsageIcons.filter(Boolean).length > 0 && (
+                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter(Boolean).length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">General Usage</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">

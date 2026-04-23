@@ -4,10 +4,11 @@ import { db } from '../firebase';
 import { Server, Users, CreditCard, Activity, ShieldAlert, ChevronRight, TrendingUp, DollarSign, MessageSquare, Save, Loader2, Wifi, Upload, Globe, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import axios from 'axios';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export function Admin() {
-  const [stats, setStats] = useState({ totalUsers: 0, totalRevenue: 0, activeConfigs: 0, serverCount: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, totalRevenue: 0, activeConfigs: 0, serverCount: 0, onlineServers: 0 });
   const [userMap, setUserMap] = useState<{ [key: string]: string }>({});
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [discordInvite, setDiscordInvite] = useState('');
@@ -24,8 +25,8 @@ export function Admin() {
   const [easySlipApiKey, setEasySlipApiKey] = useState('');
   const [rdcwClientId, setRdcwClientId] = useState('');
   const [rdcwClientSecret, setRdcwClientSecret] = useState('');
+  const [slipProvider, setSlipProvider] = useState('easyslip');
   const [darkxApiKey, setDarkxApiKey] = useState('');
-  const [slipVerifyProvider, setSlipVerifyProvider] = useState<'easyslip' | 'rdcw'>('easyslip');
   const [paymentMethods, setPaymentMethods] = useState({ promptpay: 'open', truemoney: 'open', manual: 'open' });
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
@@ -48,7 +49,9 @@ export function Admin() {
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         setLogoUrl(base64String);
-        await setDoc(doc(db, 'settings', 'global'), { logoUrl: base64String }, { merge: true });
+        await axios.post('/api/admin/settings/global', { 
+          discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl: base64String 
+        });
         setUploadingLogo(false);
       };
       reader.readAsDataURL(file);
@@ -58,10 +61,27 @@ export function Admin() {
     }
   };
 
-  useEffect(() => {
-    const unsubGlobal = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+  const fetchData = async () => {
+    try {
+      const [statsRes, settingsRes, manualRes, recentTxRes, usersRes] = await Promise.all([
+        axios.get('/api/admin/stats'),
+        axios.get('/api/admin/settings'),
+        axios.get('/api/admin/topup/manual/pending'),
+        axios.get('/api/admin/transactions'),
+        axios.get('/api/admin/users')
+      ]);
+      
+      setStats({
+        totalUsers: statsRes.data.totalUsers,
+        totalRevenue: statsRes.data.totalTransactions,
+        activeConfigs: statsRes.data.totalVpns,
+        serverCount: statsRes.data.totalServers || 0,
+        onlineServers: statsRes.data.onlineServers || 0
+      });
+
+      const settings = settingsRes.data;
+      if (settings.global) {
+        const data = settings.global;
         setDiscordInvite(data.discordInvite || '');
         setDiscordWebhookUrl(data.discordWebhookUrl || '');
         setLinkvertiseUrl(data.linkvertiseUrl || '');
@@ -70,85 +90,84 @@ export function Admin() {
         setAnnouncement(data.announcement || '');
         setLogoUrl(data.logoUrl || '');
       }
-    });
 
-    const unsubPayment = onSnapshot(doc(db, 'settings', 'payment'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+      if (settings.payment) {
+        const data = settings.payment;
         setTrueMoneyNumber(data.trueMoneyNumber || '');
         setPaymentQrUrl(data.paymentQrUrl || '');
         setBankHolder(data.bankHolder || '');
         setMinTopup(data.minTopup || 50);
-        setSlipVerifyProvider(data.slipVerifyProvider || 'easyslip');
       }
-    });
 
-    const unsubKeys = onSnapshot(doc(db, 'settings', 'payment_keys'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+      if (settings.payment_keys) {
+        const data = settings.payment_keys;
         setEasySlipApiKey(data.easySlipApiKey || '');
+        setDarkxApiKey(data.darkxApiKey || '');
         setRdcwClientId(data.rdcwClientId || '');
         setRdcwClientSecret(data.rdcwClientSecret || '');
-        setDarkxApiKey(data.darkxApiKey || '');
+        setSlipProvider(data.slipProvider || 'easyslip');
       }
-    });
 
-    const unsubMethods = onSnapshot(doc(db, 'settings', 'payment_methods'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+      if (settings.payment_methods) {
+        const data = settings.payment_methods;
         setPaymentMethods({
           promptpay: data.promptpay || 'open',
           truemoney: data.truemoney || 'open',
           manual: data.manual || 'open'
         });
       }
-    });
 
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      setRecentTransactions(recentTxRes.data);
+      setPendingTopups(manualRes.data.length);
+
       const mapping: { [key: string]: string } = {};
-      snap.docs.forEach(doc => {
-        mapping[doc.id] = doc.data().email || 'Unknown';
+      usersRes.data.forEach((u: any) => {
+        mapping[u.uid] = u.email || 'Unknown';
       });
       setUserMap(mapping);
-      setStats(prev => ({ ...prev, totalUsers: snap.size }));
-    });
 
-    const unsubServers = onSnapshot(collection(db, 'servers'), (snap) => {
-      setStats(prev => ({ ...prev, serverCount: snap.size }));
-    });
+    } catch (err) {
+      console.error('Failed to fetch admin data:', err);
+    }
+  };
 
-    const unsubTx = onSnapshot(query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(5)), (snap) => {
-      setRecentTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      // Note: Full revenue aggregation should be done in Transactions page or via a more efficient query
-    });
-
-    const unsubVpns = onSnapshot(collection(db, 'vpns'), (snap) => {
-      const now = new Date();
-      setStats(prev => ({ 
-        ...prev, 
-        activeConfigs: snap.docs.filter(d => {
-          const data = d.data();
-          return new Date(data.expireAt) > now;
-        }).length 
-      }));
-    });
-
-    const unsubPending = onSnapshot(query(collection(db, 'manual_topups'), where('status', '==', 'pending')), (snap) => {
-      setPendingTopups(snap.size);
-    });
-
-    return () => {
-      unsubGlobal();
-      unsubPayment();
-      unsubKeys();
-      unsubMethods();
-      unsubUsers();
-      unsubServers();
-      unsubTx();
-      unsubVpns();
-      unsubPending();
-    };
+  useEffect(() => {
+    fetchData();
   }, []);
+
+  const handleGlobalSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingGlobal(true);
+    try {
+      await axios.post('/api/admin/settings/global', {
+        discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Failed to save global settings:', error);
+    }
+    setSavingGlobal(false);
+  };
+
+  const handlePaymentSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPayment(true);
+    try {
+      await Promise.all([
+        axios.post('/api/admin/settings/payment', {
+          trueMoneyNumber, paymentQrUrl, bankHolder, minTopup
+        }),
+        axios.post('/api/admin/settings/payment_keys', {
+          easySlipApiKey, darkxApiKey, rdcwClientId, rdcwClientSecret, slipProvider
+        }),
+        axios.post('/api/admin/settings/payment_methods', paymentMethods)
+      ]);
+      fetchData();
+    } catch (error) {
+       console.error('Failed to save payment settings:', error);
+    }
+    setSavingPayment(false);
+  };
 
   const menuItems = [
     { to: '/admin/users', label: 'จัดการผู้ใช้', desc: 'จัดการยอดเงินและ VPN ของผู้ใช้', icon: Users, color: 'blue' },
@@ -172,8 +191,8 @@ export function Admin() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {[
           { label: 'ผู้ใช้ทั้งหมด', value: stats.totalUsers, icon: Users, color: 'blue' },
-          { label: 'Config ทั้งหมด', value: stats.activeConfigs, icon: Activity, color: 'purple' },
-          { label: 'เซิร์ฟเวอร์', value: stats.serverCount, icon: Server, color: 'amber' },
+          { label: ' Config ทั้งหมด', value: stats.activeConfigs, icon: Activity, color: 'purple' },
+          { label: 'เซิร์ฟเวอร์ออนไลน์', value: `${stats.onlineServers} / ${stats.serverCount}`, icon: Server, color: 'amber' },
           { label: 'บันทึกล่าสุด', value: recentTransactions.length, icon: CreditCard, color: 'emerald', to: '/admin/transactions' }
         ].map((s, i) => {
           const Content = (
@@ -330,9 +349,10 @@ export function Admin() {
               onClick={async () => {
                 setSavingGlobal(true);
                 try {
-                  await setDoc(doc(db, 'settings', 'global'), { discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement }, { merge: true });
+                  await axios.post('/api/admin/settings/global', { discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl });
+                  fetchData();
                 } catch (error) {
-                  handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
+                  console.error('Failed to save global settings', error);
                 } finally {
                   setSavingGlobal(false);
                 }
@@ -386,46 +406,66 @@ export function Admin() {
               />
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest block drop-shadow-sm">ระบบเช็คสลิปหลัก</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">Provider ตรวจสอบสลิปออโต้</label>
                 <div className="flex gap-2">
-                  {[
-                    { id: 'easyslip', label: 'EasySlip' },
-                    { id: 'rdcw', label: 'RDCW' }
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSlipVerifyProvider(p.id as any)}
-                      className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${
-                        slipVerifyProvider === p.id 
-                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.2)]' 
-                          : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setSlipProvider('easyslip')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                      slipProvider === 'easyslip' 
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                        : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                    }`}
+                  >
+                    EasySlip
+                  </button>
+                  <button
+                    onClick={() => setSlipProvider('rdcw')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                      slipProvider === 'rdcw' 
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                        : 'bg-black/20 border-white/10 text-slate-500 hover:border-white/20'
+                    }`}
+                  >
+                    RDCW
+                  </button>
                 </div>
               </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">DarkX API Key (TrueMoney อั่งเปา)</label>
+                <input 
+                  type="password"
+                  value={darkxApiKey}
+                  onChange={e => setDarkxApiKey(e.target.value)}
+                  placeholder="API Key จาก DarkX"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                />
+              </div>
+            </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">EasySlip API Key</label>
-                  <input 
-                    type="password"
-                    value={easySlipApiKey}
-                    onChange={e => setEasySlipApiKey(e.target.value)}
-                    placeholder="v1_xxxxxxxxxxxx"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                  />
-                </div>
+            {slipProvider === 'easyslip' && (
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">EasySlip API Key (PromptPay)</label>
+                <input 
+                  type="password"
+                  value={easySlipApiKey}
+                  onChange={e => setEasySlipApiKey(e.target.value)}
+                  placeholder="v1_xxxxxxxxxxxx"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                />
+              </div>
+            )}
+
+            {slipProvider === 'rdcw' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">RDCW Client ID</label>
                   <input 
+                    type="text"
                     value={rdcwClientId}
                     onChange={e => setRdcwClientId(e.target.value)}
-                    placeholder="Client ID จาก RDCW"
+                    placeholder="Client ID"
                     className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                   />
                 </div>
@@ -435,22 +475,12 @@ export function Admin() {
                     type="password"
                     value={rdcwClientSecret}
                     onChange={e => setRdcwClientSecret(e.target.value)}
-                    placeholder="Client Secret จาก RDCW"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">DarkX API Key (TrueMoney)</label>
-                  <input 
-                    type="password"
-                    value={darkxApiKey}
-                    onChange={e => setDarkxApiKey(e.target.value)}
-                    placeholder="API Key จาก DarkX"
+                    placeholder="Client Secret"
                     className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
                   />
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -467,22 +497,13 @@ export function Admin() {
                   onClick={async () => {
                     setSavingPayment(true);
                     try {
-                      await setDoc(doc(db, 'settings', 'payment'), { 
-                        trueMoneyNumber, 
-                        paymentQrUrl, 
-                        bankHolder, 
-                        minTopup,
-                        slipVerifyProvider
-                      }, { merge: true });
-                      
-                      await setDoc(doc(db, 'settings', 'payment_keys'), {
-                        easySlipApiKey,
-                        rdcwClientId,
-                        rdcwClientSecret,
-                        darkxApiKey
-                      }, { merge: true });
+                      await Promise.all([
+                        axios.post('/api/admin/settings/payment', { trueMoneyNumber, paymentQrUrl, bankHolder, minTopup }),
+                        axios.post('/api/admin/settings/payment_keys', { easySlipApiKey, darkxApiKey })
+                      ]);
+                      fetchData();
                     } catch (error) {
-                      handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
+                      console.error('Failed to save payment settings', error);
                     } finally {
                       setSavingPayment(false);
                     }
@@ -508,8 +529,9 @@ export function Admin() {
                       <button
                         key={mode}
                         onClick={async () => {
-                          setPaymentMethods(prev => ({ ...prev, truemoney: mode }));
-                          await setDoc(doc(db, 'settings', 'payment_methods'), { truemoney: mode }, { merge: true });
+                          const newMethods = { ...paymentMethods, truemoney: mode };
+                          setPaymentMethods(newMethods);
+                          await axios.post('/api/admin/settings/payment_methods', newMethods);
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.truemoney === mode 
@@ -531,8 +553,9 @@ export function Admin() {
                       <button
                         key={mode}
                         onClick={async () => {
-                          setPaymentMethods(prev => ({ ...prev, promptpay: mode }));
-                          await setDoc(doc(db, 'settings', 'payment_methods'), { promptpay: mode }, { merge: true });
+                          const newMethods = { ...paymentMethods, promptpay: mode };
+                          setPaymentMethods(newMethods);
+                          await axios.post('/api/admin/settings/payment_methods', newMethods);
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.promptpay === mode 
@@ -553,8 +576,9 @@ export function Admin() {
                       <button
                         key={mode}
                         onClick={async () => {
-                          setPaymentMethods(prev => ({ ...prev, manual: mode }));
-                          await setDoc(doc(db, 'settings', 'payment_methods'), { manual: mode }, { merge: true });
+                          const newMethods = { ...paymentMethods, manual: mode };
+                          setPaymentMethods(newMethods);
+                          await axios.post('/api/admin/settings/payment_methods', newMethods);
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.manual === mode 

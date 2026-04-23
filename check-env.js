@@ -1,0 +1,4 @@
+console.log('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID);
+console.log('GCLOUD_PROJECT:', process.env.GCLOUD_PROJECT);
+console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+console.log('DATABASE_ID:', process.env.FIREBASE_DATABASE_ID);
