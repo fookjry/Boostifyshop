@@ -267,8 +267,6 @@ const auth = getAuth(firebaseApp);
 const databaseId = process.env.FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId;
 const dbFirestore = getFirestore(firebaseApp, databaseId);
 
-import fs from 'fs';
-
 async function syncFirestoreToLocal() {
   const log = (msg: string) => {
     console.log(msg);
@@ -1025,9 +1023,13 @@ async function startServer() {
     }
   });
 
-  app.get("/api/my-vpns", authenticate, async (req: any, res) => {
-    const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ? ORDER BY createdAt DESC').all(req.user.uid);
-    res.json(vpns);
+  app.get("/api/my-vpns", authenticate, async (req: any, res, next) => {
+    try {
+      const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ? ORDER BY createdAt DESC').all(req.user.uid);
+      res.json(vpns);
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.get("/api/servers", async (req, res) => {
@@ -1117,14 +1119,22 @@ async function startServer() {
     res.json(getSetting('payment', { trueMoneyNumber: '', paymentQrUrl: '' }));
   });
 
-  app.get("/api/my-transactions", authenticate, async (req: any, res) => {
-    const txs = dbLocal.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT 10').all(req.user.uid);
-    res.json(txs);
+  app.get("/api/my-transactions", authenticate, async (req: any, res, next) => {
+    try {
+      const txs = dbLocal.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT 10').all(req.user.uid);
+      res.json(txs);
+    } catch (err) {
+      next(err);
+    }
   });
 
-  app.get("/api/my-manual-topups", authenticate, async (req: any, res) => {
-    const list = dbLocal.prepare('SELECT * FROM manual_topups WHERE userId = ? ORDER BY createdAt DESC LIMIT 5').all(req.user.uid);
-    res.json(list);
+  app.get("/api/my-manual-topups", authenticate, async (req: any, res, next) => {
+    try {
+      const list = dbLocal.prepare('SELECT * FROM manual_topups WHERE userId = ? ORDER BY createdAt DESC LIMIT 5').all(req.user.uid);
+      res.json(list);
+    } catch (err) {
+      next(err);
+    }
   });
 
   // Topup Verification
@@ -1154,7 +1164,7 @@ async function startServer() {
         const slipProvider = keys.slipProvider || 'easyslip';
 
         if (!data) return res.status(400).json({ success: false, error: "กรุณาอัปโหลดสลิป" });
-        const base64Image = data.replace(/^data:image\/\w+;base64,/, "");
+        const base64Image = data;
 
         let amount = 0;
         let transRef = "";
@@ -1163,7 +1173,8 @@ async function startServer() {
           const apiKey = keys.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
           if (!apiKey) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับ EasySlip" });
           
-          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', { image: base64Image }, {
+          const rawBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
+          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', { image: rawBase64 }, {
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
           });
 
@@ -1181,34 +1192,55 @@ async function startServer() {
            if (!clientId || !clientSecret) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า Client ID / Secret สำหรับ RDCW" });
            
            try {
-             // Mock RDCW request structure since actual endpoints are unknown
-             // (We perform an oauth token request followed by slip verification)
+             // 1. Prepare Basic Auth
+             const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
              
-             // 1. Get Access Token
-             const tokenRes = await axios.post('https://openapi.rdcw.co.th/v1/oauth/token', {
-                client_id: clientId,
-                client_secret: clientSecret,
-                grant_type: 'client_credentials'
-             });
-             
-             const accessToken = tokenRes.data.access_token;
-             
-             // 2. Verify Slip
-             const verifyRes = await axios.post('https://openapi.rdcw.co.th/v1/slip/verify', {
-                payload: base64Image
-             }, {
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
-             });
-             
-             if (verifyRes.data.success && verifyRes.data.data) {
-                amount = verifyRes.data.data.amount;
-                transRef = verifyRes.data.data.transRef;
+             // 2. Decode base64 to Buffer and detect MIME type
+             let mimeType = 'image/jpeg';
+             let cleanPayload = base64Image;
+             if (base64Image.startsWith('data:')) {
+                const match = base64Image.match(/^data:([^;]+);base64,(.+)$/);
+                if (match) {
+                    mimeType = match[1];
+                    cleanPayload = match[2];
+                }
              } else {
-                throw new Error(verifyRes.data.message || "Invalid slip");
+                 // Might be raw base64 already
+                 cleanPayload = base64Image;
+             }
+             const buffer = Buffer.from(cleanPayload, 'base64');
+
+             // 3. Documentation "Raw File" method:
+             // Send binary data directly with Content-Type of the image
+             const verifyRes = await axios.post('https://suba.rdcw.co.th/v2/inquiry', buffer, {
+                headers: { 
+                    'Authorization': `Basic ${authHeader}`, 
+                    'Content-Type': mimeType,
+                    'Accept': 'application/json'
+                },
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                timeout: 30000 
+             });
+             
+             // Check response structure
+             const resData = verifyRes.data;
+             if (resData.success || resData.transRef || (resData.data && (resData.data.transRef || resData.data.amount))) {
+                const slipData = resData.data || resData;
+                amount = Number(slipData.amount);
+                transRef = slipData.transRef;
+             } else {
+                const errMsg = resData.message || `Error ${resData.code}`;
+                throw new Error(errMsg);
              }
            } catch (error: any) {
-             console.error("RDCW Check Error:", error?.response?.data || error);
-             return res.status(400).json({ success: false, error: "ไม่สามารถตรวจสอบสลิปได้ โปรดติดต่อแอดมินหรือใช้เอกสาร API ของ RDCW ที่ถูกต้องเนื่องจาก endpoint นี้เป็นเพียงโครงสร้าง ตัวอย่างเท่านั้น" });
+             const errorData = error?.response?.data;
+             if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+                return res.status(503).json({ success: false, error: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ RDCW ได้" });
+             }
+             const errMsg = errorData?.message || errorData?.code || error.message;
+             console.error("RDCW v2 Error Detail:", JSON.stringify(errorData || error.message));
+             return res.status(400).json({ success: false, error: `ตรวจสอบสลิปไม่สำเร็จ: ${errMsg}` });
            }
         }
 
@@ -2064,6 +2096,19 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Global Error Handler for SQLite Corruption
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err && (err.code === 'SQLITE_CORRUPT' || (err.message && err.message.includes('malformed')))) {
+      console.error("💣 VITAL ERROR: SQLite Database is malformed during request. Forcing re-init...");
+      const dbPath = 'local_database.db';
+      if (fs.existsSync(dbPath)) {
+        try { fs.unlinkSync(dbPath); } catch(e) {}
+      }
+      process.exit(1); // Force container restart to re-init DB
+    }
+    next(err);
+  });
 
   app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${PORT}`);

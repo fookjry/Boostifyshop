@@ -39,12 +39,12 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
   const fetchData = async () => {
     try {
       const [manualRes, settingsRes, methodsRes, txRes] = await Promise.all([
-        axios.get('/api/my-manual-topups'),
-        axios.get('/api/settings/payment'),
-        axios.get('/api/payment-methods'),
-        axios.get('/api/my-transactions')
+        axios.get('/api/my-manual-topups').catch(() => ({ data: [] })),
+        axios.get('/api/settings/payment').catch(() => ({ data: {} })),
+        axios.get('/api/payment-methods').catch(() => ({ data: {} })),
+        axios.get('/api/my-transactions').catch(() => ({ data: [] }))
       ]);
-      setManualPending(manualRes.data);
+      setManualPending(Array.isArray(manualRes.data) ? manualRes.data : []);
       setPaymentSettings({
         trueMoneyNumber: settingsRes.data.trueMoneyNumber || '',
         paymentQrUrl: settingsRes.data.paymentQrUrl || ''
@@ -54,7 +54,7 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
         truemoney: methodsRes.data.truemoney || 'open',
         manual: methodsRes.data.manual || 'open'
       });
-      setTransactions(txRes.data);
+      setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
     } catch (err) {
       console.error('Failed to fetch topup data:', err);
     }

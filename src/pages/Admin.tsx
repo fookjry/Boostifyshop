@@ -482,39 +482,14 @@ export function Admin() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
-                <input 
-                  type="number"
-                  value={minTopup}
-                  onChange={e => setMinTopup(Number(e.target.value))}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-                />
-              </div>
-              <div className="flex items-end">
-                <button 
-                  onClick={async () => {
-                    setSavingPayment(true);
-                    try {
-                      await Promise.all([
-                        axios.post('/api/admin/settings/payment', { trueMoneyNumber, paymentQrUrl, bankHolder, minTopup }),
-                        axios.post('/api/admin/settings/payment_keys', { easySlipApiKey, darkxApiKey })
-                      ]);
-                      fetchData();
-                    } catch (error) {
-                      console.error('Failed to save payment settings', error);
-                    } finally {
-                      setSavingPayment(false);
-                    }
-                  }}
-                  disabled={savingPayment}
-                  className="w-full bg-emerald-600/80 hover:bg-emerald-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-md"
-                >
-                  {savingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  บันทึกการรับเงิน
-                </button>
-              </div>
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
+              <input 
+                type="number"
+                value={minTopup}
+                onChange={e => setMinTopup(Number(e.target.value))}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+              />
             </div>
 
             <div className="pt-4 border-t border-white/10 space-y-6">
@@ -528,11 +503,7 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={async () => {
-                          const newMethods = { ...paymentMethods, truemoney: mode };
-                          setPaymentMethods(newMethods);
-                          await axios.post('/api/admin/settings/payment_methods', newMethods);
-                        }}
+                        onClick={() => setPaymentMethods({ ...paymentMethods, truemoney: mode })}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.truemoney === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -552,11 +523,7 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={async () => {
-                          const newMethods = { ...paymentMethods, promptpay: mode };
-                          setPaymentMethods(newMethods);
-                          await axios.post('/api/admin/settings/payment_methods', newMethods);
-                        }}
+                        onClick={() => setPaymentMethods({ ...paymentMethods, promptpay: mode })}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.promptpay === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -575,11 +542,7 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={async () => {
-                          const newMethods = { ...paymentMethods, manual: mode };
-                          setPaymentMethods(newMethods);
-                          await axios.post('/api/admin/settings/payment_methods', newMethods);
-                        }}
+                        onClick={() => setPaymentMethods({ ...paymentMethods, manual: mode })}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.manual === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -593,6 +556,15 @@ export function Admin() {
                 </div>
               </div>
             </div>
+
+            <button 
+              onClick={(e) => handlePaymentSave(e as any)}
+              disabled={savingPayment}
+              className="w-full mt-6 bg-emerald-600/80 hover:bg-emerald-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-md"
+            >
+              {savingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              บันทึกการตั้งค่าการชำระเงินทั้งหมด
+            </button>
           </div>
         </section>
       </div>
