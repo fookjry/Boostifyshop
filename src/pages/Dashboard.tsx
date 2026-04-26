@@ -21,14 +21,27 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  const [servers, setServers] = useState<any[]>([]);
+  const [deviceOptions, setDeviceOptions] = useState<any[]>([]);
+  const [globalSettings, setGlobalSettings] = useState<any>({});
+  const [renewDuration, setRenewDuration] = useState<number>(30);
+  const [renewModalOpen, setRenewModalOpen] = useState(false);
+  const [processingRenew, setProcessingRenew] = useState(false);
+  const [renewError, setRenewError] = useState('');
+
   const fetchData = async () => {
     try {
-      const [vpnsRes, settingsRes] = await Promise.all([
+      const [vpnsRes, settingsRes, serversRes, deviceOptsRes] = await Promise.all([
         axios.get('/api/my-vpns').catch(err => ({ data: [] })),
-        axios.get('/api/settings/global').catch(err => ({ data: {} }))
+        axios.get('/api/settings/global').catch(err => ({ data: {} })),
+        axios.get('/api/servers').catch(err => ({ data: [] })),
+        axios.get('/api/device-options').catch(err => ({ data: [] }))
       ]);
       setVpns(Array.isArray(vpnsRes.data) ? vpnsRes.data : []);
+      setGlobalSettings(settingsRes.data || {});
       setDiscordInvite(settingsRes.data.discordInvite || '');
+      setServers(Array.isArray(serversRes.data) ? serversRes.data : []);
+      setDeviceOptions(Array.isArray(deviceOptsRes.data) ? deviceOptsRes.data : []);
       setLoading(false);
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
@@ -198,6 +211,18 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   <QrCode className="w-5 h-5" />
                 </button>
               </div>
+              {new Date(vpn.expireAt) > new Date() && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedVpn(vpn);
+                    setRenewModalOpen(true);
+                  }}
+                  className="w-full mt-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 py-2 rounded-lg text-sm font-bold transition-all border border-blue-500/30 backdrop-blur-sm flex items-center justify-center gap-2"
+                >
+                  <Clock className="w-4 h-4" /> ต่ออายุ
+                </button>
+              )}
             </motion.div>
           ))}
         </div>
@@ -316,8 +341,173 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                       <p className="text-white font-bold drop-shadow-sm">{selectedVpn.deviceCount || 1} เครื่อง</p>
                     </div>
                   </div>
+
+                  {(() => {
+                    const expireDate = new Date(selectedVpn.expireAt);
+                    if (expireDate > new Date()) {
+                      return (
+                        <button 
+                          onClick={() => {
+                            setRenewModalOpen(true);
+                          }}
+                          className="w-full mt-4 bg-blue-600/80 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-all border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)] backdrop-blur-md"
+                        >
+                          ต่ออายุการใช้งาน
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Renew Modal */}
+      <AnimatePresence>
+        {renewModalOpen && selectedVpn && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!processingRenew) setRenewModalOpen(false);
+              }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative glass-panel w-full max-w-lg p-8 shadow-2xl overflow-hidden"
+            >
+              <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-md">ต่ออายุการใช้งาน</h2>
+              <p className="text-slate-300 text-sm mb-6">เลือกจำนวนวันที่ต้องการต่ออายุสำหรับ VPN นี้</p>
+
+              {(() => {
+                const serverInfo = servers.find(s => s.id === selectedVpn.serverId);
+                if (!serverInfo) {
+                  return <p className="text-red-400 p-4 bg-red-500/20 rounded-xl">ไม่พบข้อมูลเซิร์ฟเวอร์ อาจถูกลบไปแล้ว</p>;
+                }
+
+                const availableDurations = serverInfo.prices 
+                  ? Object.entries(serverInfo.prices)
+                      .filter(([_, price]) => (price as number) > 0)
+                      .map(([days]) => Number(days))
+                      .sort((a, b) => a - b)
+                  : [];
+
+                if (availableDurations.length === 0) {
+                  return <p className="text-red-400 p-4 bg-red-500/20 rounded-xl">เซิร์ฟเวอร์นี้ไม่มีแพ็กเกจให้ต่ออายุ</p>;
+                }
+
+                // Make sure renewDuration is valid
+                if (!availableDurations.includes(renewDuration)) {
+                  setRenewDuration(availableDurations[0]);
+                }
+
+                const basePrice = serverInfo.prices[renewDuration] || 0;
+                const devicePrice = deviceOptions.find(o => o.count === (selectedVpn.deviceCount || 1))?.price || 0;
+                let totalPrice = basePrice + devicePrice;
+                const discountPercent = Number(globalSettings.renewDiscountPercent) || 0;
+                const discountAmount = Math.floor(totalPrice * (discountPercent / 100));
+                
+                const finalPrice = Math.max(0, totalPrice - discountAmount);
+
+                const handleConfirmRenew = async () => {
+                  if (profile.balance < finalPrice) {
+                    setRenewError('ยอดเงินคงเหลือไม่เพียงพอ กรุณาเติมเงิน');
+                    return;
+                  }
+                  
+                  setProcessingRenew(true);
+                  setRenewError('');
+                  try {
+                    const token = await user.getIdToken();
+                    const response = await axios.post('/api/vpn/renew', {
+                      vpnId: selectedVpn.id,
+                      days: renewDuration,
+                      price: finalPrice
+                    }, {
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (response.data.success) {
+                      setRenewModalOpen(false);
+                      setSelectedVpn(null);
+                      fetchData(); // Refresh data
+                    }
+                  } catch (err: any) {
+                    setRenewError(err.response?.data?.error || err.message);
+                  } finally {
+                    setProcessingRenew(false);
+                  }
+                };
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {availableDurations.map((d) => (
+                        <button 
+                          key={d}
+                          onClick={() => setRenewDuration(d)}
+                          className={`p-3 rounded-xl border transition-all ${renewDuration === d ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 text-slate-400 hover:border-white/20'}`}
+                        >
+                          <p className="text-xl font-black">{d}</p>
+                          <p className="text-[10px] uppercase font-bold">วัน</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="bg-black/20 rounded-2xl p-4 border border-white/10 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">ราคาพื้นฐาน ({renewDuration} วัน):</span>
+                        <span className="text-white font-medium">{basePrice} ฿</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">อุปกรณ์ ({selectedVpn.deviceCount || 1} เครื่อง):</span>
+                        <span className="text-white font-medium">{devicePrice === 0 ? 'ฟรี' : `+${devicePrice} ฿`}</span>
+                      </div>
+                      {discountPercent > 0 && (
+                        <div className="flex justify-between text-sm text-emerald-400">
+                          <span>ส่วนลดลูกค้าเก่า ({discountPercent}%):</span>
+                          <span>-{discountAmount} ฿</span>
+                        </div>
+                      )}
+                      <div className="pt-3 border-t border-white/10 flex justify-between items-center">
+                        <span className="text-slate-300 font-bold">ยอดชำระ:</span>
+                        <span className="text-2xl font-black text-blue-400">{finalPrice} ฿</span>
+                      </div>
+                    </div>
+
+                    {renewError && (
+                      <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-300 text-sm">
+                        {renewError}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setRenewModalOpen(false)}
+                        disabled={processingRenew}
+                        className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all disabled:opacity-50 text-white"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button 
+                        onClick={handleConfirmRenew}
+                        disabled={processingRenew}
+                        className="flex-[2] bg-blue-600/80 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] flex items-center justify-center disabled:opacity-50 border border-blue-400/50"
+                      >
+                        {processingRenew ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ชำระเงินและต่ออายุ'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </motion.div>
           </div>
         )}

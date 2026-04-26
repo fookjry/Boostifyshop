@@ -589,11 +589,17 @@ async function authenticateServer() {
     try {
       const testDoc = await db.collection('settings').doc('global').get();
       if (testDoc.exists()) {
-        console.log("Firestore server-side connection test: SUCCESS (Admin SDK)");
+        console.log("Firestore server-side connection test: SUCCESS");
+      } else {
+        console.log("Firestore server-side connection test: SUCCESS (Document not found)");
+      }
+      
+      const userCount = (dbLocal.prepare('SELECT count(*) as count FROM users').get() as any).count;
+      if (userCount === 0 || process.env.FORCE_SYNC === 'true') {
+        console.log("Local database is empty. Syncing from Firestore to populate local DB...");
         await syncFirestoreToLocal();
       } else {
-        console.log("Firestore server-side connection test: SUCCESS (Document not found but reachable via Admin SDK)");
-        await syncFirestoreToLocal();
+        console.log(`Local sqlite database already contains data (${userCount} users). Skipping full Firestore sync to save quota.`);
       }
     } catch (connError: any) {
       console.error("Firestore server-side connection test: FAILED", connError.message);
@@ -1099,6 +1105,152 @@ async function startServer() {
       res.json({ success: true, vpnId, config });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post("/api/vpn/renew", authenticate, apiLimiter, async (req: any, res) => {
+    const { vpnId, days, price } = req.body;
+    const userId = req.user.uid;
+
+    try {
+      const user = dbLocal.prepare('SELECT * FROM users WHERE uid = ?').get(userId) as any;
+      if (!user) return res.status(404).json({ success: false, error: "User not found" });
+
+      const vpn = dbLocal.prepare('SELECT * FROM vpns WHERE id = ? AND userId = ?').get(vpnId, userId) as any;
+      if (!vpn) return res.status(404).json({ success: false, error: "VPN not found" });
+
+      if (vpn.isTrial || vpn.isAdClaim) {
+        return res.status(400).json({ success: false, error: "ไม่สามารถต่ออายุการใช้งานจากโปรโมชั่นหรือทดลองใช้งานได้ กรุณาสั่งซื้อใหม่" });
+      }
+
+      const expireDate = new Date(vpn.expireAt);
+      if (expireDate <= new Date()) {
+        return res.status(400).json({ success: false, error: "เซิร์ฟเวอร์นี้หมดอายุแล้ว ไม่สามารถต่ออายุได้ กรุณาสั่งซื้อใหม่" });
+      }
+
+      const server = dbLocal.prepare('SELECT * FROM servers WHERE id = ?').get(vpn.serverId) as any;
+      if (!server || server.status !== 'online') {
+         return res.status(400).json({ success: false, error: "เซิร์ฟเวอร์นี้ไม่พร้อมใช้งาน ปิดปรับปรุงชั่วคราว" });
+      }
+
+      const parsedPrices = typeof server.prices === 'string' ? JSON.parse(server.prices) : server.prices;
+      if (!parsedPrices || !parsedPrices[days]) {
+        return res.status(400).json({ success: false, error: "จำนวนวันที่เลือกไม่ถูกต้องสำหรับเซิร์ฟเวอร์นี้" });
+      }
+
+      // Re-calculate price on server side
+      const basePrice = parsedPrices[days] || 0;
+      let devicePrice = 0;
+      const deviceOpts = dbLocal.prepare('SELECT * FROM device_options WHERE count = ?').get(vpn.deviceCount || 1) as any;
+      if (deviceOpts) {
+        devicePrice = deviceOpts.price || 0;
+      }
+      
+      const totalPrice = basePrice + devicePrice;
+      const globalSettings = dbLocal.prepare("SELECT data FROM settings WHERE id = 'global'").get() as any;
+      let discountPercent = 0;
+      if (globalSettings && globalSettings.data) {
+        const parsedGlobal = JSON.parse(globalSettings.data);
+        discountPercent = Number(parsedGlobal.renewDiscountPercent) || 0;
+      }
+      
+      const discountAmount = Math.floor(totalPrice * (discountPercent / 100));
+      const finalPrice = Math.max(0, totalPrice - discountAmount);
+
+      if (user.balance < finalPrice) {
+        return res.status(400).json({ success: false, error: "ยอดเงินคงเหลือไม่เพียงพอ (Insufficient balance)" });
+      }
+
+      const newExpiryTime = expireDate.getTime() + (days * 24 * 60 * 60 * 1000);
+      
+      // Update in 3x-ui
+      const baseUrl = server.host.endsWith('/') ? server.host.slice(0, -1) : server.host;
+      let detailedError = "";
+
+
+      const loginUrl = `${baseUrl}/login`;
+      console.log(`[DEBUG] Attempting login at: ${loginUrl}`);
+      const loginRes = await axios.post(loginUrl, { username: server.username, password: server.password })
+          .catch(err => { 
+            console.error(`[DEBUG] Login error: ${err.message} URL: ${loginUrl} Response: ${err.response?.status}`); 
+            return null; 
+          });
+
+      if (!loginRes) {
+        throw new Error(detailedError || "Could not connect to 3x-ui panel.");
+      }
+
+      const cookie = loginRes.headers['set-cookie'];
+      if (!cookie) throw new Error("Login successful but no session cookie received.");
+      const cookieStr = cookie.join('; ');
+
+      const getInboundUrl = `${baseUrl}/panel/api/inbounds/get/${vpn.inboundId}`;
+      console.log(`[DEBUG] Getting inbound at: ${getInboundUrl}`);
+      const getInboundRes = await axios.get(getInboundUrl, {
+        headers: { 'Cookie': cookieStr }
+      }).catch(err => {
+        console.error(`[DEBUG] Get inbound error: ${err.message} URL: ${getInboundUrl} Response: ${err.response?.status}`);
+        throw err;
+      });
+
+      if (!getInboundRes.data.success) {
+        throw new Error(`Inbound ID ${vpn.inboundId} not found on server.`);
+      }
+
+      const inbound = getInboundRes.data.obj;
+      const inboundProtocol = inbound.protocol;
+
+      const client = {
+        id: inboundProtocol === "trojan" || inboundProtocol === "shadowsocks" ? undefined : vpn.uuid,
+        password: inboundProtocol === "trojan" ? vpn.uuid : undefined,
+        secret: inboundProtocol === "shadowsocks" ? vpn.uuid : undefined,
+        email: vpn.clientName || vpn.uuid.substring(0, 8),
+        limitIp: vpn.deviceCount || 1,
+        totalGB: 0,
+        expiryTime: newExpiryTime,
+        enable: true,
+        tgId: "",
+        subId: ""
+      };
+
+      const clientData = {
+        id: vpn.inboundId,
+        settings: JSON.stringify({
+          clients: [client]
+        })
+      };
+
+      const updateUrl = `${baseUrl}/panel/api/inbounds/updateClient/${vpn.uuid}`;
+      console.log(`[DEBUG] Updating client at: ${updateUrl}`);
+      const updateRes = await axios.post(updateUrl, clientData, { 
+        headers: { 'Cookie': cookieStr }
+      }).catch(err => {
+        console.error(`[DEBUG] Update client error: ${err.message} URL: ${updateUrl} Response: ${err.response?.status}`);
+        throw err;
+      });
+
+      if (!updateRes.data.success) {
+        throw new Error(`Failed to update client in 3x-ui: ${updateRes.data.msg}`);
+      }
+
+      const now = new Date().toISOString();
+      const newExpireAtStr = new Date(newExpiryTime).toISOString();
+
+      const renewTx = dbLocal.transaction(() => {
+        dbLocal.prepare('UPDATE users SET balance = balance - ? WHERE uid = ?').run(finalPrice, userId);
+        dbLocal.prepare('UPDATE vpns SET expireAt = ?, status = ? WHERE id = ?').run(newExpireAtStr, 'active', vpnId);
+        
+        dbLocal.prepare(`
+          INSERT INTO transactions (id, userId, userEmail, amount, type, timestamp, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), userId, user.email || 'user', -finalPrice, 'purchase', now, `ต่ออายุ VPN ${days} วัน (${vpn.network})`);
+      });
+      renewTx();
+
+      res.json({ success: true, newExpireAt: newExpireAtStr });
+    } catch (error: any) {
+      console.error("Renew Error:", error);
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 

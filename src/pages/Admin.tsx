@@ -18,6 +18,7 @@ export function Admin() {
   const [siteName, setSiteName] = useState('VPNSaaS');
   const [announcement, setAnnouncement] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [renewDiscountPercent, setRenewDiscountPercent] = useState(0);
   const [trueMoneyNumber, setTrueMoneyNumber] = useState('');
   const [paymentQrUrl, setPaymentQrUrl] = useState('');
   const [bankHolder, setBankHolder] = useState('');
@@ -92,6 +93,7 @@ export function Admin() {
         setSiteName(data.siteName || 'VPNSaaS');
         setAnnouncement(data.announcement || '');
         setLogoUrl(data.logoUrl || '');
+        setRenewDiscountPercent(Number(data.renewDiscountPercent) || 0);
       }
 
       if (settings.payment) {
@@ -144,7 +146,7 @@ export function Admin() {
     setSavingGlobal(true);
     try {
       await axios.post('/api/admin/settings/global', {
-        discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl
+        discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl, renewDiscountPercent
       });
       fetchData();
     } catch (error) {
@@ -345,6 +347,19 @@ export function Admin() {
             </div>
 
             <div className="space-y-1">
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">ส่วนลดการต่ออายุ (%)</label>
+              <input 
+                type="number"
+                min="0"
+                max="100"
+                placeholder="0" 
+                value={renewDiscountPercent}
+                onChange={e => setRenewDiscountPercent(Number(e.target.value))}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+              />
+            </div>
+
+            <div className="space-y-1">
               <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm flex justify-between items-center">
                 Linkvertise URL (ดูโฆษณารับ config ทันที)
                 <button 
@@ -378,7 +393,7 @@ export function Admin() {
               onClick={async () => {
                 setSavingGlobal(true);
                 try {
-                  await axios.post('/api/admin/settings/global', { discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl });
+                  await axios.post('/api/admin/settings/global', { discordInvite, discordWebhookUrl, linkvertiseUrl, linkvertiseEnabled, siteName, announcement, logoUrl, renewDiscountPercent });
                   fetchData();
                 } catch (error) {
                   console.error('Failed to save global settings', error);

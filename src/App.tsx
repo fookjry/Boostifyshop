@@ -87,7 +87,7 @@ export default function App() {
 
     const profileInterval = setInterval(() => {
       if (auth.currentUser) fetchProfile();
-    }, 30000);
+    }, 60000);
 
     return () => {
       unsubscribe();

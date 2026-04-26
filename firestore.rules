@@ -49,7 +49,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow get: if isAdmin() || isOwner(userId);
+      allow list: if isAdmin();
       allow create: if isSignedIn() && isOwner(userId) && 
                     isValidUser(incoming()) &&
                     (incoming().role == 'user' || 
@@ -108,16 +109,16 @@ service cloud.firestore {
 
     // VPN Config Rules
     match /vpns/{vpnId} {
-      allow get: if isSignedIn() && isValidId(vpnId) && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(vpnId) && (isAdmin() || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || existing().userId == request.auth.uid);
       allow create, update: if isAdmin() && isValidVPN(incoming());
       allow delete: if isAdmin();
     }
 
     // Transaction Rules
     match /transactions/{txId} {
-      allow get: if isSignedIn() && isValidId(txId) && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(txId) && (isAdmin() || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || existing().userId == request.auth.uid);
       allow create, update, delete: if isAdmin();
     }
 
@@ -128,26 +129,26 @@ service cloud.firestore {
 
     // Manual Topups Rules
     match /manual_topups/{id} {
-      allow get: if isSignedIn() && isValidId(id) && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(id) && (isAdmin() || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || existing().userId == request.auth.uid);
       allow create, update, delete: if isAdmin();
     }
 
     // Global Settings Rules
     match /settings/{settingId} {
-      allow get: if (settingId != 'payment_keys' || isAdmin()) && isValidId(settingId);
+      allow get: if isAdmin() || (settingId != 'payment_keys' && isValidId(settingId));
       allow list: if isAdmin();
       allow write: if isAdmin() && isValidId(settingId);
     }
 
     // Tickets Rules
     match /tickets/{ticketId} {
-      allow get: if isSignedIn() && isValidId(ticketId) && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(ticketId) && (isAdmin() || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || existing().userId == request.auth.uid);
       allow create, update, delete: if isAdmin();
       
       match /messages/{messageId} {
-        allow get: if isSignedIn() && isValidId(messageId) && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid || isAdmin());
+        allow get: if isSignedIn() && isValidId(messageId) && (isAdmin() || get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid);
         allow list: if isSignedIn();
         allow create, update, delete: if isAdmin();
       }
