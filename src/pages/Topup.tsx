@@ -38,25 +38,30 @@ export function Topup({ user, profile }: { user: any; profile: any }) {
 
   const fetchData = async () => {
     try {
-      const [manualRes, settingsRes, methodsRes, txRes] = await Promise.all([
-        axios.get('/api/my-manual-topups').catch(() => ({ data: [] })),
-        axios.get('/api/settings/payment').catch(() => ({ data: {} })),
-        axios.get('/api/payment-methods').catch(() => ({ data: {} })),
-        axios.get('/api/my-transactions').catch(() => ({ data: [] }))
+      const results = await Promise.allSettled([
+        axios.get('/api/my-manual-topups'),
+        axios.get('/api/settings/payment'),
+        axios.get('/api/payment-methods'),
+        axios.get('/api/my-transactions')
       ]);
-      setManualPending(Array.isArray(manualRes.data) ? manualRes.data : []);
-      setPaymentSettings({
-        trueMoneyNumber: settingsRes.data.trueMoneyNumber || '',
-        paymentQrUrl: settingsRes.data.paymentQrUrl || ''
-      });
-      setPaymentMethods({
-        promptpay: methodsRes.data.promptpay || 'open',
-        truemoney: methodsRes.data.truemoney || 'open',
-        manual: methodsRes.data.manual || 'open'
-      });
-      setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
+
+      if (results[0].status === 'fulfilled') setManualPending(results[0].value.data);
+      if (results[1].status === 'fulfilled') {
+        setPaymentSettings({
+          trueMoneyNumber: results[1].value.data.trueMoneyNumber || '',
+          paymentQrUrl: results[1].value.data.paymentQrUrl || ''
+        });
+      }
+      if (results[2].status === 'fulfilled') {
+        setPaymentMethods({
+          promptpay: results[2].value.data.promptpay || 'open',
+          truemoney: results[2].value.data.truemoney || 'open',
+          manual: results[2].value.data.manual || 'open'
+        });
+      }
+      if (results[3].status === 'fulfilled') setTransactions(results[3].value.data);
     } catch (err) {
-      console.error('Failed to fetch topup data:', err);
+      console.error('Failed to fetch topup data completely:', err);
     }
   };
 

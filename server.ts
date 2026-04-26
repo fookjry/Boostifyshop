@@ -8,10 +8,11 @@ import { fileURLToPath } from "url";
 import axios from "axios";
 import helmet from "helmet";
 import cors from "cors";
-import compression from "compression";
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from "express-rate-limit";
 import crypto from "crypto";
+import fs from 'fs';
+import Database from 'better-sqlite3';
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
@@ -75,35 +76,40 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw error;
 }
 
-import fs from 'fs';
-import Database from 'better-sqlite3';
-
-let dbLocal: any;
-const dbPath = 'local_database.db';
+let dbLocal: Database.Database;
 try {
-    dbLocal = new Database(dbPath);
-} catch (e: any) {
-    if (e.code === 'SQLITE_CORRUPT') {
-        fs.unlinkSync(dbPath);
-        dbLocal = new Database(dbPath);
-    } else {
-        throw e;
+  dbLocal = new Database('local_database.db');
+  // Initial check or setup
+  dbLocal.pragma('journal_mode = WAL');
+  
+  // Verify integrity or just let the first exec fail and catch it
+} catch (error: any) {
+  console.error('Failed to open database, may be corrupted:', error);
+  if (error.code === 'SQLITE_CORRUPT' || error.message.includes('malformed')) {
+    const backupName = `local_database.db.corrupt.${Date.now()}`;
+    console.warn(`Database corrupted! Renaming to ${backupName} and recreating.`);
+    if (fs.existsSync('local_database.db')) {
+      fs.renameSync('local_database.db', backupName);
     }
+    dbLocal = new Database('local_database.db');
+  } else {
+    throw error;
+  }
 }
 
 // Initialize Local Database tables
 try {
   dbLocal.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    uid TEXT PRIMARY KEY,
-    email TEXT,
-    role TEXT DEFAULT 'user',
-    balance REAL DEFAULT 0,
-    hasUsedTrial INTEGER DEFAULT 0,
-    lastTrialAt TEXT,
-    lastAdClaimAt TEXT,
-    createdAt TEXT
-  );
+    CREATE TABLE IF NOT EXISTS users (
+      uid TEXT PRIMARY KEY,
+      email TEXT,
+      role TEXT DEFAULT 'user',
+      balance REAL DEFAULT 0,
+      hasUsedTrial INTEGER DEFAULT 0,
+      lastTrialAt TEXT,
+      lastAdClaimAt TEXT,
+      createdAt TEXT
+    );
 
   CREATE TABLE IF NOT EXISTS vpns (
     id TEXT PRIMARY KEY,
@@ -227,12 +233,152 @@ try {
     status INTEGER DEFAULT 1
   );
 `);
-} catch (e: any) {
-  if (e.code === 'SQLITE_CORRUPT') {
-    fs.unlinkSync(dbPath);
-    console.warn("Database structure corrupted.");
+} catch (error: any) {
+  if (error.code === 'SQLITE_CORRUPT' || error.message.includes('malformed')) {
+    const backupName = `local_database.db.corrupt.${Date.now()}`;
+    console.warn(`Database corrupted during initialization! Renaming to ${backupName} and recreating.`);
+    try { dbLocal.close(); } catch(e) {}
+    if (fs.existsSync('local_database.db')) {
+      fs.renameSync('local_database.db', backupName);
+    }
+    dbLocal = new Database('local_database.db');
+    // Try to initialize one more time
+    dbLocal.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        uid TEXT PRIMARY KEY,
+        email TEXT,
+        role TEXT DEFAULT 'user',
+        balance REAL DEFAULT 0,
+        hasUsedTrial INTEGER DEFAULT 0,
+        lastTrialAt TEXT,
+        lastAdClaimAt TEXT,
+        createdAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS vpns (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        serverId TEXT,
+        serverName TEXT,
+        inboundId INTEGER,
+        uuid TEXT,
+        config TEXT,
+        expireAt TEXT,
+        status TEXT,
+        network TEXT,
+        deviceCount INTEGER,
+        clientName TEXT,
+        isTrial INTEGER DEFAULT 0,
+        isAdClaim INTEGER DEFAULT 0,
+        createdAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS servers (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        host TEXT,
+        port INTEGER,
+        username TEXT,
+        password TEXT,
+        description TEXT,
+        supportedAppIcons TEXT,
+        generalUsageIcons TEXT,
+        status TEXT,
+        prices TEXT,
+        maxUsers INTEGER,
+        currentUsers INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS networks (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        inboundId INTEGER,
+        status TEXT,
+        color TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userEmail TEXT,
+        amount REAL,
+        type TEXT,
+        timestamp TEXT,
+        note TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        id TEXT PRIMARY KEY,
+        data TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS manual_topups (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userEmail TEXT,
+        amount REAL,
+        slipHash TEXT,
+        status TEXT,
+        createdAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS linkvertise_sessions (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userEmail TEXT,
+        ipAddress TEXT,
+        serverId TEXT,
+        network TEXT,
+        status TEXT,
+        createdAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS linkvertise_claims (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        ipAddress TEXT,
+        claimTime TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS used_slips (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        amount REAL,
+        timestamp TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS tickets (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userEmail TEXT,
+        subject TEXT,
+        status TEXT,
+        priority TEXT,
+        createdAt TEXT,
+        updatedAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS ticket_messages (
+        id TEXT PRIMARY KEY,
+        ticketId TEXT,
+        userId TEXT,
+        userEmail TEXT,
+        content TEXT,
+        role TEXT,
+        timestamp TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS device_options (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        count INTEGER,
+        price REAL,
+        sortOrder INTEGER,
+        status INTEGER DEFAULT 1
+      );
+    `);
   } else {
-    throw e;
+    throw error;
   }
 }
 
@@ -296,80 +442,71 @@ async function syncFirestoreToLocal() {
       const snap = await getDocs(collection(dbModular, col.name));
       log(`📡 Found ${snap.size} documents in Firestore [${col.name}]`);
       
-      // Use a transaction for bulk inserts to significantly improve speed
-      const processBatch = dbLocal.transaction(() => {
-        for (const doc of snap.docs) {
-          const data = doc.data();
-          const id = doc.id;
-          
-          if (col.table === 'users') {
-            dbLocal.prepare(`
-              INSERT OR REPLACE INTO users (uid, email, role, balance, hasUsedTrial, lastTrialAt, lastAdClaimAt, createdAt)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(id, data.email || '', data.role || 'user', Number(data.balance || 0), data.hasUsedTrial ? 1 : 0, data.lastTrialAt || null, data.lastAdClaimAt || null, data.createdAt || new Date().toISOString());
-          } else if (col.table === 'servers') {
-             const stringifyField = (val: any) => {
-               if (val === undefined || val === null) return '[]';
-               if (typeof val === 'string') {
-                 if (val.trim().startsWith('[') || val.trim().startsWith('{')) return val;
-                 return val;
-               }
-               return JSON.stringify(val);
-             };
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        const id = doc.id;
+        
+        if (col.table === 'users') {
+          dbLocal.prepare(`
+            INSERT OR REPLACE INTO users (uid, email, role, balance, hasUsedTrial, lastTrialAt, lastAdClaimAt, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(id, data.email || '', data.role || 'user', Number(data.balance || 0), data.hasUsedTrial ? 1 : 0, data.lastTrialAt || null, data.lastAdClaimAt || null, data.createdAt || new Date().toISOString());
+        } else if (col.table === 'servers') {
+           const stringifyField = (val: any) => {
+             if (val === undefined || val === null) return '[]';
+             if (typeof val === 'string') {
+               // If it looks like a JSON string already, don't re-encode
+               if (val.trim().startsWith('[') || val.trim().startsWith('{')) return val;
+               return val; // It's just a string
+             }
+             return JSON.stringify(val);
+           };
 
-             dbLocal.prepare(`
-              INSERT OR REPLACE INTO servers (id, name, host, port, username, password, description, supportedAppIcons, generalUsageIcons, status, prices, maxUsers, currentUsers)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-              id, 
-              data.name || '', 
-              data.host || '', 
-              Number(data.port || 0), 
-              data.username || '', 
-              data.password || '', 
-              data.description || '', 
-              stringifyField(data.supportedAppIcons), 
-              stringifyField(data.generalUsageIcons), 
-              data.status || 'offline', 
-              typeof data.prices === 'string' ? data.prices : JSON.stringify(data.prices || {}), 
-              Number(data.maxUsers || 100), 
-              Number(data.currentUsers || 0)
-            );
-          } else if (col.table === 'networks') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO networks (id, name, inboundId, status, color) VALUES (?, ?, ?, ?, ?)`)
-                    .run(id, data.name || '', Number(data.inboundId || 0), data.status || 'open', data.color || 'emerald');
-          } else if (col.table === 'settings') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO settings (id, data) VALUES (?, ?)`)
-                    .run(id, typeof data === 'string' ? data : JSON.stringify(data));
-          } else if (col.table === 'vpns') {
-             dbLocal.prepare(`
-              INSERT OR REPLACE INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, deviceCount, clientName, isTrial, isAdClaim, createdAt)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(id, data.userId || '', data.serverId || '', data.serverName || '', Number(data.inboundId || 0), data.uuid || '', data.config || '', data.expireAt || '', data.status || 'active', data.network || '', Number(data.deviceCount || 1), data.clientName || '', data.isTrial ? 1 : 0, data.isAdClaim ? 1 : 0, data.createdAt || new Date().toISOString());
-          } else if (col.table === 'transactions') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO transactions (id, userId, userEmail, amount, type, timestamp, note) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-                    .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.type || '', String(data.timestamp || ''), data.note || '');
-          } else if (col.table === 'manual_topups') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO manual_topups (id, userId, userEmail, amount, slipHash, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-                    .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.slipHash || '', data.status || 'pending', data.createdAt || '');
-          } else if (col.table === 'tickets') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO tickets (id, userId, userEmail, subject, status, priority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-                    .run(id, data.userId || '', data.userEmail || '', data.subject || '', data.status || 'open', data.priority || 'medium', data.createdAt || '', data.updatedAt || '');
-          } else if (col.table === 'device_options') {
-             dbLocal.prepare(`INSERT OR REPLACE INTO device_options (id, name, count, price, sortOrder, status) VALUES (?, ?, ?, ?, ?, ?)`)
-                    .run(id, data.name || '', Number(data.count || 0), Number(data.price || 0), Number(data.sortOrder || 0), data.status ? 1 : 0);
-          }
+           dbLocal.prepare(`
+            INSERT OR REPLACE INTO servers (id, name, host, port, username, password, description, supportedAppIcons, generalUsageIcons, status, prices, maxUsers, currentUsers)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            id, 
+            data.name || '', 
+            data.host || '', 
+            Number(data.port || 0), 
+            data.username || '', 
+            data.password || '', 
+            data.description || '', 
+            stringifyField(data.supportedAppIcons), 
+            stringifyField(data.generalUsageIcons), 
+            data.status || 'offline', 
+            typeof data.prices === 'string' ? data.prices : JSON.stringify(data.prices || {}), 
+            Number(data.maxUsers || 100), 
+            Number(data.currentUsers || 0)
+          );
+        } else if (col.table === 'networks') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO networks (id, name, inboundId, status, color) VALUES (?, ?, ?, ?, ?)`)
+                  .run(id, data.name || '', Number(data.inboundId || 0), data.status || 'open', data.color || 'emerald');
+        } else if (col.table === 'settings') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO settings (id, data) VALUES (?, ?)`)
+                  .run(id, typeof data === 'string' ? data : JSON.stringify(data));
+        } else if (col.table === 'vpns') {
+           dbLocal.prepare(`
+            INSERT OR REPLACE INTO vpns (id, userId, serverId, serverName, inboundId, uuid, config, expireAt, status, network, deviceCount, clientName, isTrial, isAdClaim, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(id, data.userId || '', data.serverId || '', data.serverName || '', Number(data.inboundId || 0), data.uuid || '', data.config || '', data.expireAt || '', data.status || 'active', data.network || '', Number(data.deviceCount || 1), data.clientName || '', data.isTrial ? 1 : 0, data.isAdClaim ? 1 : 0, data.createdAt || new Date().toISOString());
+        } else if (col.table === 'transactions') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO transactions (id, userId, userEmail, amount, type, timestamp, note) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+                  .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.type || '', String(data.timestamp || ''), data.note || '');
+        } else if (col.table === 'manual_topups') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO manual_topups (id, userId, userEmail, amount, slipHash, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+                  .run(id, data.userId || '', data.userEmail || '', Number(data.amount || 0), data.slipHash || '', data.status || 'pending', data.createdAt || '');
+        } else if (col.table === 'tickets') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO tickets (id, userId, userEmail, subject, status, priority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+                  .run(id, data.userId || '', data.userEmail || '', data.subject || '', data.status || 'open', data.priority || 'medium', data.createdAt || '', data.updatedAt || '');
+        } else if (col.table === 'device_options') {
+           dbLocal.prepare(`INSERT OR REPLACE INTO device_options (id, name, count, price, sortOrder, status) VALUES (?, ?, ?, ?, ?, ?)`)
+                  .run(id, data.name || '', Number(data.count || 0), Number(data.price || 0), Number(data.sortOrder || 0), data.status ? 1 : 0);
         }
-      });
-      
-      processBatch();
+      }
     } catch (e: any) {
       log(`⚠️ Failed to sync collection [${col.name}]: ${e.message}`);
-      if (e.code === 'SQLITE_CORRUPT') {
-        log(`💣 Critical Database Corruption on [${col.name}]. Forcing re-init.`);
-        fs.unlinkSync(dbPath);
-        process.exit(1); // Force container restart to re-init DB
-      }
     }
   }
   log('✅ Firestore to SQLite sync completed.');
@@ -482,8 +619,7 @@ async function authenticateServer() {
     }
   }
 }
-// authenticateServer is now called inside startServer to avoid blocking startup
-// authenticateServer();
+await authenticateServer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -555,9 +691,6 @@ function matchReceiverName(slipName: string, configName: string): boolean {
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Use compression to reduce network payload size
-  app.use(compression());
 
   // Trust proxy for rate limiting (Cloud Run/Nginx)
   // Set to 1 to trust the first proxy (e.g., Cloud Run load balancer)
@@ -1023,13 +1156,9 @@ async function startServer() {
     }
   });
 
-  app.get("/api/my-vpns", authenticate, async (req: any, res, next) => {
-    try {
-      const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ? ORDER BY createdAt DESC').all(req.user.uid);
-      res.json(vpns);
-    } catch (err) {
-      next(err);
-    }
+  app.get("/api/my-vpns", authenticate, async (req: any, res) => {
+    const vpns = dbLocal.prepare('SELECT * FROM vpns WHERE userId = ? ORDER BY createdAt DESC').all(req.user.uid);
+    res.json(vpns);
   });
 
   app.get("/api/servers", async (req, res) => {
@@ -1119,22 +1248,14 @@ async function startServer() {
     res.json(getSetting('payment', { trueMoneyNumber: '', paymentQrUrl: '' }));
   });
 
-  app.get("/api/my-transactions", authenticate, async (req: any, res, next) => {
-    try {
-      const txs = dbLocal.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT 10').all(req.user.uid);
-      res.json(txs);
-    } catch (err) {
-      next(err);
-    }
+  app.get("/api/my-transactions", authenticate, async (req: any, res) => {
+    const txs = dbLocal.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT 10').all(req.user.uid);
+    res.json(txs);
   });
 
-  app.get("/api/my-manual-topups", authenticate, async (req: any, res, next) => {
-    try {
-      const list = dbLocal.prepare('SELECT * FROM manual_topups WHERE userId = ? ORDER BY createdAt DESC LIMIT 5').all(req.user.uid);
-      res.json(list);
-    } catch (err) {
-      next(err);
-    }
+  app.get("/api/my-manual-topups", authenticate, async (req: any, res) => {
+    const list = dbLocal.prepare('SELECT * FROM manual_topups WHERE userId = ? ORDER BY createdAt DESC LIMIT 5').all(req.user.uid);
+    res.json(list);
   });
 
   // Topup Verification
@@ -1164,7 +1285,7 @@ async function startServer() {
         const slipProvider = keys.slipProvider || 'easyslip';
 
         if (!data) return res.status(400).json({ success: false, error: "กรุณาอัปโหลดสลิป" });
-        const base64Image = data;
+        const base64Image = data.replace(/^data:image\/\w+;base64,/, "");
 
         let amount = 0;
         let transRef = "";
@@ -1173,8 +1294,7 @@ async function startServer() {
           const apiKey = keys.easySlipApiKey || process.env.EASY_SLIP_API_KEY;
           if (!apiKey) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า API Key สำหรับ EasySlip" });
           
-          const rawBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
-          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', { image: rawBase64 }, {
+          const verifyRes = await axios.post('https://developer.easyslip.com/api/v1/verify', { image: base64Image }, {
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
           });
 
@@ -1192,55 +1312,34 @@ async function startServer() {
            if (!clientId || !clientSecret) return res.status(400).json({ success: false, error: "ระบบยังไม่ได้ตั้งค่า Client ID / Secret สำหรับ RDCW" });
            
            try {
-             // 1. Prepare Basic Auth
-             const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-             
-             // 2. Decode base64 to Buffer and detect MIME type
-             let mimeType = 'image/jpeg';
-             let cleanPayload = base64Image;
-             if (base64Image.startsWith('data:')) {
-                const match = base64Image.match(/^data:([^;]+);base64,(.+)$/);
-                if (match) {
-                    mimeType = match[1];
-                    cleanPayload = match[2];
-                }
-             } else {
-                 // Might be raw base64 already
-                 cleanPayload = base64Image;
-             }
-             const buffer = Buffer.from(cleanPayload, 'base64');
+             const imageBuffer = Buffer.from(base64Image, 'base64');
+             const authHeader = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
 
-             // 3. Documentation "Raw File" method:
-             // Send binary data directly with Content-Type of the image
-             const verifyRes = await axios.post('https://suba.rdcw.co.th/v2/inquiry', buffer, {
-                headers: { 
-                    'Authorization': `Basic ${authHeader}`, 
-                    'Content-Type': mimeType,
-                    'Accept': 'application/json'
-                },
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-                timeout: 30000 
+             const verifyRes = await axios.post('https://suba.rdcw.co.th/v2/inquiry', imageBuffer, {
+               headers: { 
+                 'Authorization': authHeader, 
+                 'Content-Type': 'image/jpeg' 
+               }
              });
              
-             // Check response structure
-             const resData = verifyRes.data;
-             if (resData.success || resData.transRef || (resData.data && (resData.data.transRef || resData.data.amount))) {
-                const slipData = resData.data || resData;
-                amount = Number(slipData.amount);
-                transRef = slipData.transRef;
+             const result = verifyRes.data;
+             const resData = result.data || result.payload || result;
+             
+             if (resData && (resData.amount !== undefined || resData.transRef !== undefined)) {
+               amount = resData.amount?.amount || resData.amount;
+               transRef = resData.transRef || resData.transactionId || resData.ref1;
              } else {
-                const errMsg = resData.message || `Error ${resData.code}`;
-                throw new Error(errMsg);
+               throw new Error("รูปแบบสลิปไม่ถูกต้อง หรือเอกสาร API เปลี่ยนแปลง");
              }
            } catch (error: any) {
-             const errorData = error?.response?.data;
-             if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-                return res.status(503).json({ success: false, error: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ RDCW ได้" });
+             console.error("RDCW Check Error:", error?.response?.data || error);
+             let errorMsg = "ไม่สามารถตรวจสอบสลิปได้ (RDCW)";
+             if (error?.response?.data?.message) {
+               errorMsg = `${errorMsg}: ${error.response.data.message}`;
+             } else if (error?.response?.data?.code) {
+               errorMsg = `${errorMsg} - Error Code: ${error.response.data.code}`;
              }
-             const errMsg = errorData?.message || errorData?.code || error.message;
-             console.error("RDCW v2 Error Detail:", JSON.stringify(errorData || error.message));
-             return res.status(400).json({ success: false, error: `ตรวจสอบสลิปไม่สำเร็จ: ${errMsg}` });
+             return res.status(400).json({ success: false, error: errorMsg });
            }
         }
 
@@ -1696,8 +1795,13 @@ async function startServer() {
   app.get("/api/admin/servers", authenticate, adminOnly, async (req: any, res) => {
     try {
       const list = dbLocal.prepare('SELECT * FROM servers').all();
+      const now = new Date().toISOString();
       // Parse prices
       list.forEach((s: any) => {
+        // Calculate dynamic current users from vpns table
+        const activeUsersCount = dbLocal.prepare('SELECT COUNT(*) as count FROM vpns WHERE serverId = ? AND expireAt > ?').get(s.id, now) as { count: number };
+        s.currentUsers = activeUsersCount.count || 0;
+        
         try {
           s.prices = JSON.parse(s.prices);
         } catch(e) {
@@ -1883,12 +1987,26 @@ async function startServer() {
 
   // --- Client Protected API Routes ---
   app.get("/api/admin/stats", authenticate, adminOnly, async (req, res) => {
+    const now = new Date().toISOString();
     const totalUsers = (dbLocal.prepare('SELECT count(*) as count FROM users').get() as any).count;
-    const totalVpns = (dbLocal.prepare('SELECT count(*) as count FROM vpns').get() as any).count;
+    const totalVpns = (dbLocal.prepare('SELECT count(*) as count FROM vpns WHERE expireAt > ?').get(now) as any).count;
     const totalTransactions = (dbLocal.prepare('SELECT sum(amount) as sum FROM transactions').get() as any).sum || 0;
     const totalServers = (dbLocal.prepare('SELECT count(*) as count FROM servers').get() as any).count;
     const onlineServers = (dbLocal.prepare("SELECT count(*) as count FROM servers WHERE status != 'offline'").get() as any).count;
-    res.json({ totalUsers, totalVpns, totalTransactions, totalServers, onlineServers });
+    
+    // Get server stats
+    const serversList = dbLocal.prepare('SELECT id, name, maxUsers FROM servers').all() as any[];
+    const serversStats = serversList.map(s => {
+      const activeUsersCount = dbLocal.prepare('SELECT COUNT(*) as count FROM vpns WHERE serverId = ? AND expireAt > ?').get(s.id, now) as { count: number };
+      return {
+        id: s.id,
+        name: s.name,
+        currentUsers: activeUsersCount.count || 0,
+        maxUsers: s.maxUsers || null
+      };
+    });
+
+    res.json({ totalUsers, totalVpns, totalTransactions, totalServers, onlineServers, serversStats });
   });
 
   app.get("/api/admin/users", authenticate, adminOnly, async (req, res) => {
@@ -1908,6 +2026,11 @@ async function startServer() {
 
   app.get("/api/admin/tickets", authenticate, adminOnly, async (req, res) => {
     const list = dbLocal.prepare('SELECT * FROM tickets ORDER BY updatedAt DESC').all();
+    res.json(list);
+  });
+
+  app.get("/api/admin/tickets/pending", authenticate, adminOnly, async (req, res) => {
+    const list = dbLocal.prepare("SELECT * FROM tickets WHERE status IN ('open', 'waiting') ORDER BY updatedAt DESC").all();
     res.json(list);
   });
 
@@ -2086,37 +2209,14 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    // Cache static assets for better performance
-    app.use(express.static(distPath, {
-      maxAge: '1d',
-      etag: true,
-      lastModified: true
-    }));
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  // Global Error Handler for SQLite Corruption
-  app.use((err: any, req: any, res: any, next: any) => {
-    if (err && (err.code === 'SQLITE_CORRUPT' || (err.message && err.message.includes('malformed')))) {
-      console.error("💣 VITAL ERROR: SQLite Database is malformed during request. Forcing re-init...");
-      const dbPath = 'local_database.db';
-      if (fs.existsSync(dbPath)) {
-        try { fs.unlinkSync(dbPath); } catch(e) {}
-      }
-      process.exit(1); // Force container restart to re-init DB
-    }
-    next(err);
-  });
-
-  app.listen(PORT, "0.0.0.0", async () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    
-    // Authenticate and sync in background after server is up
-    authenticateServer().catch(err => {
-      console.error("Background authentication/sync failed:", err);
-    });
   });
 }
 

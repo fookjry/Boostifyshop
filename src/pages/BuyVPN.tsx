@@ -38,23 +38,36 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [serversRes, networksRes, deviceOptionsRes, vpnsRes, globalRes] = await Promise.all([
+        const results = await Promise.allSettled([
           axios.get('/api/servers'),
           axios.get('/api/networks'),
           axios.get('/api/device-options'),
           axios.get('/api/my-vpns'),
           axios.get('/api/settings/global')
         ]);
-        setServers(serversRes.data);
-        setNetworks(networksRes.data.filter((n: any) => n.status === 'open' || n.status === 'active'));
-        setDeviceOptions(deviceOptionsRes.data);
-        if (deviceOptionsRes.data.length > 0) {
-          setDeviceCount(deviceOptionsRes.data[0].count);
+        
+        if (results[0].status === 'fulfilled') {
+          setServers(results[0].value.data);
         }
-        setVpns(vpnsRes.data);
-        setLinkvertiseEnabled(globalRes.data.linkvertiseEnabled !== false);
+        if (results[1].status === 'fulfilled') {
+          setNetworks(results[1].value.data.filter((n: any) => n.status === 'open' || n.status === 'active'));
+        }
+        if (results[2].status === 'fulfilled') {
+          setDeviceOptions(results[2].value.data);
+          if (results[2].value.data.length > 0) {
+            setDeviceCount(results[2].value.data[0].count);
+          }
+        }
+        if (results[3].status === 'fulfilled') {
+          setVpns(results[3].value.data);
+        } else {
+          console.error("Failed to fetch my-vpns:", results[3].reason);
+        }
+        if (results[4].status === 'fulfilled') {
+          setLinkvertiseEnabled(results[4].value.data.linkvertiseEnabled !== false);
+        }
       } catch (err) {
-        console.error('Failed to fetch data:', err);
+        console.error('Failed to fetch data completely:', err);
       }
     };
 
@@ -64,13 +77,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   const handlePurchase = async () => {
     if (!selectedServer || !selectedServer.prices) return;
     
-    // Check server capacity using currentUsers field on server document
-    const activeUsers = selectedServer.currentUsers || 0;
-    if (selectedServer.maxUsers && activeUsers >= selectedServer.maxUsers) {
-      setError('เซิร์ฟเวอร์นี้เต็มแล้ว กรุณาเลือกเซิร์ฟเวอร์อื่น (Server is full)');
-      return;
-    }
-
     const basePrice = selectedServer.prices[duration] || 0;
     const devicePrice = deviceOptions.find(o => o.count === deviceCount)?.price || 0;
     const totalPrice = basePrice + devicePrice;
@@ -206,13 +212,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
   const prePurchaseCheck = () => {
     if (!selectedServer) return;
     
-    // Check server capacity
-    const activeUsers = allVpns.filter(v => v.serverId === selectedServer.id && new Date(v.expireAt) > new Date()).length;
-    if (selectedServer.maxUsers && activeUsers >= selectedServer.maxUsers) {
-      setError('ขออภัย เซิร์ฟเวอร์นี้เต็มแล้ว (Server is full)');
-      return;
-    }
-
     if (selectedServer.status !== 'online') {
       setError('ขออภัย เซิร์ฟเวอร์นี้ปิดปรับปรุงชั่วคราว (Server is offline)');
       return;
@@ -269,9 +268,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="font-bold text-white drop-shadow-sm">{s.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                        ผู้ใช้งาน: {s.currentUsers || 0} / {s.maxUsers || '∞'}
-                      </p>
                     </div>
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${s.status === 'online' ? 'bg-emerald-400 text-emerald-400' : 'bg-red-400 text-red-400'}`} />
                   </div>
@@ -281,11 +277,11 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
                   <div className="flex flex-col gap-3">
                     {/* Supported Apps */}
-                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter(Boolean).length > 0 && (
+                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">Supported Apps</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.supportedAppIcons.filter(Boolean).map((icon: string, idx: number) => (
+                          {s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).map((icon: string, idx: number) => (
                             <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
                               <img src={icon} alt="App" className="w-full h-full object-contain" />
                             </div>
@@ -295,11 +291,11 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                     )}
 
                     {/* General Usage */}
-                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter(Boolean).length > 0 && (
+                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">General Usage</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.generalUsageIcons.filter(Boolean).map((icon: string, idx: number) => (
+                          {s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).map((icon: string, idx: number) => (
                             <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
                               <img src={icon} alt="Usage" className="w-full h-full object-contain" />
                             </div>
@@ -504,20 +500,19 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
             </label>
 
             <button 
-              disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+              disabled={loading || !selectedServer || !selectedNetwork || !acceptedTerms}
               onClick={prePurchaseCheck}
               className="w-full glass-button py-4 text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-all"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 
                (!selectedServer || !selectedNetwork) ? 'เลือกเซิร์ฟเวอร์และเครือข่าย' :
-               !acceptedTerms ? 'โปรดยอมรับเงื่อนไข' :
-               (selectedServer?.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers) ? 'เซิร์ฟเวอร์เต็ม' : 'ยืนยันการสั่งซื้อ'}
+               !acceptedTerms ? 'โปรดยอมรับเงื่อนไข' : 'ยืนยันการสั่งซื้อ'}
             </button>
 
             {canUseTrial() && (
               <button 
                 onClick={handleFreeTrial}
-                disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+                disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms}
                 className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
               >
                 {trialLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : trialSuccess ? <Check className="w-5 h-5" /> : <Gift className="w-5 h-5" />}
@@ -529,7 +524,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
               <div className="mt-4 space-y-2">
                 <button 
                   onClick={handleAdClaim}
-                  disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms || (selectedServer.maxUsers && (selectedServer.currentUsers || 0) >= selectedServer.maxUsers)}
+                  disabled={trialLoading || loading || !selectedServer || !selectedNetwork || !acceptedTerms}
                   className="relative w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 py-3 rounded-xl font-bold transition-all backdrop-blur-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-[0_0_15px_rgba(245,158,11,0.1)] overflow-hidden"
                 >
                   <span className="absolute top-0 right-0 bg-amber-500 text-[8px] text-black px-2 py-0.5 rounded-bl-lg font-black tracking-tighter">BETA</span>

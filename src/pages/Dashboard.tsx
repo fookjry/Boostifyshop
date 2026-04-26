@@ -140,7 +140,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   {vpn.network}
                 </div>
                 <div className="flex items-center gap-2">
-                  {vpn.isTrial && (
+                  {Boolean(vpn.isTrial) && (
                     <div className="bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 border border-amber-500/30 shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                       <Gift className="w-3 h-3" /> ทดลองใช้งาน
                     </div>

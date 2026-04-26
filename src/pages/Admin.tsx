@@ -8,7 +8,7 @@ import axios from 'axios';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export function Admin() {
-  const [stats, setStats] = useState({ totalUsers: 0, totalRevenue: 0, activeConfigs: 0, serverCount: 0, onlineServers: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, totalRevenue: 0, activeConfigs: 0, serverCount: 0, onlineServers: 0, serversStats: [] as any[] });
   const [userMap, setUserMap] = useState<{ [key: string]: string }>({});
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [discordInvite, setDiscordInvite] = useState('');
@@ -32,6 +32,7 @@ export function Admin() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [pendingTopups, setPendingTopups] = useState(0);
+  const [pendingTickets, setPendingTickets] = useState(0);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,12 +64,13 @@ export function Admin() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, settingsRes, manualRes, recentTxRes, usersRes] = await Promise.all([
+      const [statsRes, settingsRes, manualRes, recentTxRes, usersRes, ticketsPendingRes] = await Promise.all([
         axios.get('/api/admin/stats'),
         axios.get('/api/admin/settings'),
         axios.get('/api/admin/topup/manual/pending'),
         axios.get('/api/admin/transactions'),
-        axios.get('/api/admin/users')
+        axios.get('/api/admin/users'),
+        axios.get('/api/admin/tickets/pending')
       ]);
       
       setStats({
@@ -76,7 +78,8 @@ export function Admin() {
         totalRevenue: statsRes.data.totalTransactions,
         activeConfigs: statsRes.data.totalVpns,
         serverCount: statsRes.data.totalServers || 0,
-        onlineServers: statsRes.data.onlineServers || 0
+        onlineServers: statsRes.data.onlineServers || 0,
+        serversStats: statsRes.data.serversStats || []
       });
 
       const settings = settingsRes.data;
@@ -119,6 +122,7 @@ export function Admin() {
 
       setRecentTransactions(recentTxRes.data);
       setPendingTopups(manualRes.data.length);
+      setPendingTickets(ticketsPendingRes.data.length);
 
       const mapping: { [key: string]: string } = {};
       usersRes.data.forEach((u: any) => {
@@ -219,6 +223,26 @@ export function Admin() {
         })}
       </div>
 
+      {/* Server Users */}
+      {stats.serversStats && stats.serversStats.length > 0 && (
+        <div className="glass-panel p-6">
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Server className="w-6 h-6 text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" /> สถิติผู้ใช้งานแต่ละเซิร์ฟเวอร์
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {stats.serversStats.map(s => (
+              <div key={s.id} className="bg-black/20 p-4 rounded-xl border border-white/5 relative overflow-hidden group hover:border-indigo-500/30 transition-all hover:shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/50 group-hover:bg-indigo-400 transition-colors" />
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 pl-2 truncate">{s.name}</p>
+                <p className="text-xl font-black text-white drop-shadow-sm pl-2">
+                  {s.currentUsers} <span className="text-xs text-slate-500 font-normal">/ {s.maxUsers || '∞'}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Management Shortcuts */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {menuItems.map((item, i) => (
@@ -230,6 +254,11 @@ export function Admin() {
             {item.to === '/admin/transactions' && pendingTopups > 0 && (
               <span className="absolute top-4 right-4 bg-red-500 text-white text-[12px] w-6 h-6 flex items-center justify-center rounded-full font-black drop-shadow-md animate-bounce">
                 {pendingTopups > 9 ? '9+' : pendingTopups}
+              </span>
+            )}
+            {item.to === '/admin/tickets' && pendingTickets > 0 && (
+              <span className="absolute top-4 right-4 bg-blue-500 text-white text-[12px] w-6 h-6 flex items-center justify-center rounded-full font-black drop-shadow-md animate-bounce">
+                {pendingTickets > 9 ? '9+' : pendingTickets}
               </span>
             )}
             <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-${item.color}-500/20 flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform border border-${item.color}-500/30 shadow-[0_0_10px_rgba(currentColor,0.2)]`}>
@@ -482,14 +511,16 @@ export function Admin() {
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
-              <input 
-                type="number"
-                value={minTopup}
-                onChange={e => setMinTopup(Number(e.target.value))}
-                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
-              />
+            <div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest drop-shadow-sm">เติมเงินขั้นต่ำ (บาท)</label>
+                <input 
+                  type="number"
+                  value={minTopup}
+                  onChange={e => setMinTopup(Number(e.target.value))}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all backdrop-blur-sm shadow-inner"
+                />
+              </div>
             </div>
 
             <div className="pt-4 border-t border-white/10 space-y-6">
@@ -503,7 +534,10 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={() => setPaymentMethods({ ...paymentMethods, truemoney: mode })}
+                        onClick={() => {
+                          const newMethods = { ...paymentMethods, truemoney: mode };
+                          setPaymentMethods(newMethods);
+                        }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.truemoney === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -523,7 +557,10 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={() => setPaymentMethods({ ...paymentMethods, promptpay: mode })}
+                        onClick={() => {
+                          const newMethods = { ...paymentMethods, promptpay: mode };
+                          setPaymentMethods(newMethods);
+                        }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.promptpay === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -542,7 +579,10 @@ export function Admin() {
                     {['open', 'closed', 'maintenance'].map((mode) => (
                       <button
                         key={mode}
-                        onClick={() => setPaymentMethods({ ...paymentMethods, manual: mode })}
+                        onClick={() => {
+                          const newMethods = { ...paymentMethods, manual: mode };
+                          setPaymentMethods(newMethods);
+                        }}
                         className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
                           paymentMethods.manual === mode 
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
@@ -554,17 +594,33 @@ export function Admin() {
                     ))}
                   </div>
                 </div>
+
+                <div className="pt-6 border-t border-white/10">
+                  <button 
+                    onClick={async () => {
+                      setSavingPayment(true);
+                      try {
+                        await Promise.all([
+                          axios.post('/api/admin/settings/payment', { trueMoneyNumber, paymentQrUrl, bankHolder, minTopup }),
+                          axios.post('/api/admin/settings/payment_keys', { easySlipApiKey, darkxApiKey, rdcwClientId, rdcwClientSecret, slipProvider }),
+                          axios.post('/api/admin/settings/payment_methods', paymentMethods)
+                        ]);
+                        fetchData();
+                      } catch (error) {
+                        console.error('Failed to save payment settings', error);
+                      } finally {
+                        setSavingPayment(false);
+                      }
+                    }}
+                    disabled={savingPayment}
+                    className="w-full bg-emerald-600/80 hover:bg-emerald-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-md"
+                  >
+                    {savingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    บันทึกการรับเงิน
+                  </button>
+                </div>
               </div>
             </div>
-
-            <button 
-              onClick={(e) => handlePaymentSave(e as any)}
-              disabled={savingPayment}
-              className="w-full mt-6 bg-emerald-600/80 hover:bg-emerald-500 disabled:bg-white/5 disabled:text-slate-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)] backdrop-blur-md"
-            >
-              {savingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-              บันทึกการตั้งค่าการชำระเงินทั้งหมด
-            </button>
           </div>
         </section>
       </div>

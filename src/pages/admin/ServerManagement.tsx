@@ -409,7 +409,7 @@ export function ServerManagement() {
                     <p className="text-[10px] md:text-xs text-slate-400 font-mono">{s.host}:{s.port}</p>
                     <span className="hidden sm:inline text-slate-600">•</span>
                     <p className="text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-widest drop-shadow-sm">
-                      {vpns.filter(v => v.serverId === s.id).length} / {s.maxUsers || '∞'} ผู้ใช้งาน
+                      {s.currentUsers || 0} / {s.maxUsers || '∞'} ผู้ใช้งาน
                     </p>
                   </div>
                 </div>

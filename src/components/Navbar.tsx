@@ -11,6 +11,7 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
   const location = useLocation();
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [pendingTopups, setPendingTopups] = useState(0);
+  const [pendingTickets, setPendingTickets] = useState(0);
 
   useEffect(() => {
     if (user && profile?.role === 'admin') {
@@ -18,6 +19,9 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
         try {
           const res = await axios.get('/api/admin/topup/manual/pending');
           setPendingTopups(res.data.length);
+
+          const ticketRes = await axios.get('/api/admin/tickets/pending');
+          setPendingTickets(ticketRes.data.length);
         } catch (e) {
           console.error(e);
         }
@@ -91,9 +95,9 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                       className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-all drop-shadow-[0_0_8px_rgba(251,191,36,0.3)] relative"
                     >
                       แอดมิน <ChevronDown className={`w-4 h-4 transition-transform ${showAdminMenu ? 'rotate-180' : ''}`} />
-                      {pendingTopups > 0 && (
+                      {pendingTopups + pendingTickets > 0 && (
                         <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-black drop-shadow-md animate-pulse">
-                          {pendingTopups > 9 ? '9+' : pendingTopups}
+                          {pendingTopups + pendingTickets > 9 ? '9+' : pendingTopups + pendingTickets}
                         </span>
                       )}
                     </button>
@@ -122,6 +126,11 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
                                 {link.to === '/admin/transactions' && pendingTopups > 0 && (
                                   <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
                                     {pendingTopups}
+                                  </span>
+                                )}
+                                {link.to === '/admin/tickets' && pendingTickets > 0 && (
+                                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                                    {pendingTickets}
                                   </span>
                                 )}
                               </Link>
@@ -182,9 +191,9 @@ export function Navbar({ user, profile, settings }: { user: any; profile: any; s
               >
                 <div className="relative">
                   <ShieldCheck className="w-5 h-5 shrink-0" />
-                  {pendingTopups > 0 && (
+                  {pendingTopups + pendingTickets > 0 && (
                     <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-black animate-pulse border border-slate-950">
-                      {pendingTopups > 9 ? '9+' : pendingTopups}
+                      {pendingTopups + pendingTickets > 9 ? '9+' : pendingTopups + pendingTickets}
                     </span>
                   )}
                 </div>
