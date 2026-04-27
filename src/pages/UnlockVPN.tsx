@@ -31,20 +31,6 @@ export function UnlockVPN({ user, profile }: { user: any, profile: any }) {
           setVpnConfig(response.data.vpn);
           // Remove token after success
           localStorage.removeItem('pending_lv_token');
-          
-          // Copy to clipboard
-          if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(response.data.vpn.config);
-            setCopied(true);
-          } else {
-             const textArea = document.createElement("textarea");
-             textArea.value = response.data.vpn.config;
-             document.body.appendChild(textArea);
-             textArea.select();
-             document.execCommand('copy');
-             textArea.remove();
-             setCopied(true);
-          }
         }
       } catch (err: any) {
         setError(err.response?.data?.error || err.message);

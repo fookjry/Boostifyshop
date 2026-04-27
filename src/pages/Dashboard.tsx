@@ -146,7 +146,6 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
           {filteredVpns.map((vpn) => (
             <motion.div 
               key={vpn.id}
-              layoutId={vpn.id}
               onClick={() => setSelectedVpn(vpn)}
               className="glass-card p-6 cursor-pointer group"
             >
@@ -158,6 +157,11 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   {Boolean(vpn.isTrial) && (
                     <div className="bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 border border-amber-500/30 shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                       <Gift className="w-3 h-3" /> ทดลองใช้งาน
+                    </div>
+                  )}
+                  {Boolean(vpn.isAdClaim) && (
+                    <div className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 border border-purple-500/30 shadow-[0_0_8px_rgba(168,85,247,0.3)]">
+                      <Gift className="w-3 h-3" /> รับจากโฆษณา
                     </div>
                   )}
                   {(() => {
@@ -214,7 +218,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   <QrCode className="w-5 h-5" />
                 </button>
               </div>
-              {parseSafeDate(vpn.expireAt).getTime() > new Date().getTime() && (
+              {parseSafeDate(vpn.expireAt).getTime() > new Date().getTime() && !vpn.isTrial && !vpn.isAdClaim && (
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -348,7 +352,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
 
                   {(() => {
                     const expireDate = parseSafeDate(selectedVpn.expireAt);
-                    if (expireDate.getTime() > new Date().getTime()) {
+                    if (expireDate.getTime() > new Date().getTime() && !selectedVpn.isTrial && !selectedVpn.isAdClaim) {
                       return (
                         <button 
                           onClick={() => {
