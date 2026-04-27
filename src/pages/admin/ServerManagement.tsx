@@ -3,82 +3,6 @@ import axios from 'axios';
 import { Server, Plus, Trash2, Power, Settings, Edit, Loader2, Save, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-const IconSlot = ({ field, index, label, data, setData }: { field: string, index: number, label: string, data: any, setData: any }) => {
-  const icon = data[field]?.[index];
-  const [isPasting, setIsPasting] = useState(false);
-  const [tempUrl, setTempUrl] = useState("");
-
-  const removeIcon = () => {
-    const currentIcons = [...(data[field] || [])];
-    currentIcons[index] = null;
-    setData({ ...data, [field]: currentIcons });
-  };
-
-  const handleSaveUrl = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (tempUrl) {
-      if (tempUrl.startsWith('data:')) {
-        alert('ไม่อนุญาตให้ใช้ข้อมูลรูปภาพโดยตรง (data URI) กรุณาใช้ลิงก์ URL (เช่น https://...)');
-        return;
-      }
-      if (tempUrl.length > 2000) {
-        alert('ลิงก์ URL ยาวเกินไป (เกิน 2000 ตัวอักษร)');
-        return;
-      }
-      const currentIcons = [...(data[field] || [])];
-      currentIcons[index] = tempUrl;
-      setData({ ...data, [field]: currentIcons });
-      setIsPasting(false);
-      setTempUrl("");
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative group/icon w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center overflow-hidden transition-all hover:border-slate-700">
-        {icon ? (
-          <>
-            <img src={icon} alt={label} className="w-full h-full object-contain p-2" />
-            <button
-              type="button"
-              onClick={removeIcon}
-              className="absolute top-1 right-1 bg-red-500 p-1 rounded-md opacity-0 group-hover/icon:opacity-100 transition-opacity"
-            >
-              <Trash2 className="w-3 h-3 text-white" />
-            </button>
-          </>
-        ) : isPasting ? (
-          <div className="absolute inset-0 bg-slate-900 p-1 flex flex-col items-center justify-center gap-1 z-10">
-            <input 
-              autoFocus
-              type="text"
-              placeholder="Paste URL"
-              className="w-full bg-black border border-slate-700 rounded text-[8px] p-1 text-white text-center"
-              value={tempUrl}
-              onChange={e => setTempUrl(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' ? handleSaveUrl() : null}
-            />
-            <div className="flex gap-1 w-full justify-center mt-1">
-              <button type="button" onClick={handleSaveUrl} className="bg-blue-500 hover:bg-blue-600 rounded text-[8px] px-2 py-0.5 text-white transition-colors">OK</button>
-              <button type="button" onClick={() => { setIsPasting(false); setTempUrl(""); }} className="bg-slate-700 hover:bg-slate-600 rounded text-[8px] px-2 py-0.5 text-white transition-colors">X</button>
-            </div>
-          </div>
-        ) : (
-          <button 
-            type="button"
-            onClick={() => setIsPasting(true)}
-            className="cursor-pointer flex flex-col items-center justify-center w-full h-full gap-1 text-slate-600 hover:text-blue-400 transition-colors"
-          >
-            <Upload className="w-5 h-5" />
-            <span className="text-[8px] font-bold uppercase text-center mt-1 leading-tight">Paste<br/>URL</span>
-          </button>
-        )}
-      </div>
-      <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
-    </div>
-  );
-};
-
 const ServerForm = ({ data, setData, onSubmit, onCancel, title, isSaving }: any) => {
   return (
     <form onSubmit={onSubmit} className="flex flex-col max-h-[75dvh]">
@@ -160,26 +84,6 @@ const ServerForm = ({ data, setData, onSubmit, onCancel, title, isSaving }: any)
           />
         </div>
 
-        {/* Supported Apps Selection */}
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">แอพที่รองรับ (สูงสุด 2 แอพ)</label>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
-            <IconSlot field="supportedAppIcons" index={0} label="App 1" data={data} setData={setData} />
-            <IconSlot field="supportedAppIcons" index={1} label="App 2" data={data} setData={setData} />
-          </div>
-        </div>
-
-        {/* General Usage Selection */}
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">การใช้งานทั่วไป (สูงสุด 4 แอพ)</label>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
-            <IconSlot field="generalUsageIcons" index={0} label="Usage 1" data={data} setData={setData} />
-            <IconSlot field="generalUsageIcons" index={1} label="Usage 2" data={data} setData={setData} />
-            <IconSlot field="generalUsageIcons" index={2} label="Usage 3" data={data} setData={setData} />
-            <IconSlot field="generalUsageIcons" index={3} label="Usage 4" data={data} setData={setData} />
-          </div>
-        </div>
-
         <div className="space-y-4">
           <div className="flex justify-between items-end">
             <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">ราคา (บาท)</label>
@@ -259,12 +163,20 @@ export function ServerManagement() {
   const fetchServers = async () => {
     try {
       const response = await axios.get('/api/admin/servers');
-      // Format supportedAppIcons / generalUsageIcons which are saved as JSON strings
-      const parsedData = response.data.map((s: any) => ({
-        ...s,
-        supportedAppIcons: s.supportedAppIcons ? JSON.parse(s.supportedAppIcons) : [],
-        generalUsageIcons: s.generalUsageIcons ? JSON.parse(s.generalUsageIcons) : []
-      }));
+      // Remove parsing of removed icon fields, they are unused and empty now.
+      const parsedData = response.data.map((s: any) => {
+        let prices = {};
+        try {
+          prices = typeof s.prices === 'string' ? JSON.parse(s.prices) : s.prices;
+        } catch (e) {}
+
+        return {
+          ...s,
+          prices,
+          supportedAppIcons: [],
+          generalUsageIcons: []
+        };
+      });
       setServers(parsedData);
     } catch (error) {
       console.error('Failed to fetch servers', error);
@@ -291,25 +203,13 @@ export function ServerManagement() {
   const handleAddServer = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check for base64 / invalid icons
-    const allIcons = [
-      ...(newServer.supportedAppIcons || []),
-      ...(newServer.generalUsageIcons || [])
-    ];
-    for (const icon of allIcons) {
-      if (icon && typeof icon === 'string' && (icon.startsWith('data:') || icon.length > 2000)) {
-        alert('พบรูปภาพแบบแนบโดยตรงในระบบ กรุณาลบและใช้เป็นลิงก์ URL แทน เพื่อไม่ให้เกิดข้อผิดพลาดในการบันทึก');
-        return;
-      }
-    }
-
     setIsSaving(true);
     try {
-      // Stringify icons before sending
+      // Set to empty string/array to avoid large bloat since we removed the feature
       const serverPayload = {
         ...newServer,
-        supportedAppIcons: JSON.stringify(newServer.supportedAppIcons || []),
-        generalUsageIcons: JSON.stringify(newServer.generalUsageIcons || []),
+        supportedAppIcons: '[]',
+        generalUsageIcons: '[]',
         status: 'online'
       };
       await axios.post('/api/admin/servers', serverPayload);
@@ -330,24 +230,13 @@ export function ServerManagement() {
     if (!editingServer) return;
 
     // Check for base64 / invalid icons
-    const allIcons = [
-      ...(editingServer.supportedAppIcons || []),
-      ...(editingServer.generalUsageIcons || [])
-    ];
-    for (const icon of allIcons) {
-      if (icon && typeof icon === 'string' && (icon.startsWith('data:') || icon.length > 2000)) {
-        alert('พบรูปภาพแบบแนบโดยตรงในระบบ กรุณาลบและใช้เป็นลิงก์ URL แทน เพื่อไม่ให้เกิดข้อผิดพลาดในการบันทึก');
-        return;
-      }
-    }
-
     setIsSaving(true);
     try {
       const { id, ...data } = editingServer;
       const serverPayload = {
         ...data,
-        supportedAppIcons: JSON.stringify(data.supportedAppIcons || []),
-        generalUsageIcons: JSON.stringify(data.generalUsageIcons || []),
+        supportedAppIcons: '[]',
+        generalUsageIcons: '[]',
       };
       await axios.put(`/api/admin/servers/${id}`, serverPayload);
       setEditingServer(null);
@@ -366,8 +255,8 @@ export function ServerManagement() {
       await axios.put(`/api/admin/servers/${server.id}`, {
         ...server,
         status: server.status === 'online' ? 'offline' : 'online',
-        supportedAppIcons: JSON.stringify(server.supportedAppIcons || []),
-        generalUsageIcons: JSON.stringify(server.generalUsageIcons || []),
+        supportedAppIcons: '[]',
+        generalUsageIcons: '[]',
       });
       fetchServers();
     } catch (error) {

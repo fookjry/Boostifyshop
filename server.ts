@@ -18,7 +18,7 @@ import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "fi
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { initializeApp } from "firebase/app";
-import { initializeFirestore, getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, query, where, limit, setLogLevel } from "firebase/firestore";
+import { initializeFirestore, getFirestore, doc, collection, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, query, where, limit, setLogLevel, orderBy } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 
@@ -153,7 +153,7 @@ async function syncFirestoreToLocal() {
       log(`📡 Found ${snap.size} documents in Firestore [${col.name}]`);
       
       for (const doc of snap.docs) {
-        const data = doc.data();
+        const data: any = doc.data();
         const id = doc.id;
         
         if (col.table === 'users') {
@@ -428,7 +428,7 @@ async function startServer() {
   // Rate Limiting
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10000, 
+    max: 1000000, 
     message: { error: "Too many requests from this IP, please try again after 15 minutes" },
     standardHeaders: true,
     legacyHeaders: false,
@@ -436,19 +436,19 @@ async function startServer() {
 
   const topupLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 500, // Limit each IP to 10 topup attempts per hour
+    max: 50000, 
     message: { error: "Too many topup attempts, please try again in an hour" },
   });
 
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 20 login attempts per 15 minutes
+    max: 100000,
     message: { error: "Too many login attempts, please try again after 15 minutes" },
   });
 
   const purchaseLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
-    max: 500, // Limit each IP to 5 purchase attempts per 10 minutes
+    max: 50000,
     message: { error: "Too many purchase attempts, please try again after 10 minutes" },
   });
 
@@ -1027,8 +1027,8 @@ async function startServer() {
         };
 
         s.prices = parseJson(s.prices, {});
-        s.supportedAppIcons = parseJson(s.supportedAppIcons, []);
-        s.generalUsageIcons = parseJson(s.generalUsageIcons, []);
+        s.supportedAppIcons = [];
+        s.generalUsageIcons = [];
       });
       res.json(servers);
     } catch (error: any) {
@@ -1376,7 +1376,7 @@ async function startServer() {
 
   const replyLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, 
-    max: 30,
+    max: 30000,
     message: { error: "Too many messages, please wait a moment" },
   });
 
@@ -1719,17 +1719,6 @@ async function startServer() {
     try {
       const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(7);
       
-      const truncateIcons = (val: any) => {
-        if (!val) return '[]';
-        let parsed = val;
-        if (typeof val === 'string') {
-          try { parsed = JSON.parse(val); } catch(e) { return '[]'; }
-        }
-        if (!Array.isArray(parsed)) return '[]';
-        const cleaned = parsed.map(i => typeof i === 'string' && i.length < 2000 ? i : null).filter(Boolean);
-        return JSON.stringify(cleaned);
-      };
-
       const serverData = {
         name: data.name,
         host: data.host,
@@ -1740,8 +1729,8 @@ async function startServer() {
         status: data.status || 'online',
         maxUsers: data.maxUsers || 100,
         description: data.description || '',
-        supportedAppIcons: truncateIcons(data.supportedAppIcons),
-        generalUsageIcons: truncateIcons(data.generalUsageIcons)
+        supportedAppIcons: '[]',
+        generalUsageIcons: '[]'
       };
 
       // Update SQLite
@@ -1770,17 +1759,6 @@ async function startServer() {
     const { id } = req.params;
     const data = req.body;
     try {
-      const truncateIcons = (val: any) => {
-        if (!val) return '[]';
-        let parsed = val;
-        if (typeof val === 'string') {
-          try { parsed = JSON.parse(val); } catch(e) { return '[]'; }
-        }
-        if (!Array.isArray(parsed)) return '[]';
-        const cleaned = parsed.map(i => typeof i === 'string' && i.length < 2000 ? i : null).filter(Boolean);
-        return JSON.stringify(cleaned);
-      };
-
       const serverData = {
         name: data.name,
         host: data.host,
@@ -1791,8 +1769,8 @@ async function startServer() {
         status: data.status,
         maxUsers: data.maxUsers || 100,
         description: data.description || '',
-        supportedAppIcons: truncateIcons(data.supportedAppIcons),
-        generalUsageIcons: truncateIcons(data.generalUsageIcons)
+        supportedAppIcons: '[]',
+        generalUsageIcons: '[]'
       };
 
       // Update SQLite
@@ -2063,7 +2041,7 @@ async function startServer() {
             }; return await txFn(); }));
       await claimTx();
 
-      res.json({ success: true });
+      res.json({ success: true, vpn: vpnResult });
     } catch (err: any) {
       console.error('Ad Claim error:', err);
       res.status(500).json({ error: err.message });

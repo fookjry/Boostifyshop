@@ -239,18 +239,31 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
     setShowConfirmModal(true);
   };
 
-  const availableDurations = selectedServer?.prices 
-    ? Object.entries(selectedServer.prices)
+  const handleServerClick = (s: any) => {
+    setSelectedServer(s);
+    if (s?.prices) {
+      const durations = Object.entries(s.prices)
         .filter(([_, price]) => (price as number) > 0)
         .map(([days]) => Number(days))
-        .sort((a, b) => a - b)
-    : [];
-
-  useEffect(() => {
-    if (selectedServer?.prices && !selectedServer.prices[duration]) {
-      setDuration(availableDurations[0]);
+        .sort((a, b) => a - b);
+      
+      if (durations.length > 0) {
+        // Only override if the current duration is invalid for this server
+        if (!s.prices[duration] || s.prices[duration] <= 0) {
+          setDuration(durations[0]);
+        }
+      }
     }
-  }, [selectedServer, availableDurations]);
+  };
+
+  const availableDurations = React.useMemo(() => {
+    return selectedServer?.prices 
+      ? Object.entries(selectedServer.prices)
+          .filter(([_, price]) => (price as number) > 0)
+          .map(([days]) => Number(days))
+          .sort((a, b) => a - b)
+      : [];
+  }, [selectedServer?.prices]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8">
@@ -271,7 +284,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
               {servers.length > 0 ? servers.map((s) => (
                 <button 
                   key={s.id}
-                  onClick={() => setSelectedServer(s)}
+                  onClick={() => handleServerClick(s)}
                   className={`p-4 rounded-2xl border text-left transition-all backdrop-blur-md ${selectedServer?.id === s.id ? 'bg-blue-600/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black/20 border-white/10 hover:bg-white/5 hover:border-white/20'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -285,49 +298,6 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                   )}
 
                   <div className="flex flex-col gap-3">
-                    {/* Supported Apps */}
-                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null').length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">Supported Apps</p>
-                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null' && i !== 'undefined').slice(0, 2).map((icon: string, idx: number) => (
-                            <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
-                              <img 
-                                src={icon} 
-                                alt="App" 
-                                className="w-full h-full object-contain opacity-0 transition-opacity duration-300" 
-                                onLoad={(e) => (e.target as HTMLElement).classList.remove('opacity-0')}
-                                onError={(e) => {
-                                  (e.target as HTMLElement).parentElement!.style.display = 'none';
-                                }} 
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* General Usage */}
-                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null').length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">General Usage</p>
-                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null' && i !== 'undefined').slice(0, 4).map((icon: string, idx: number) => (
-                            <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
-                              <img 
-                                src={icon} 
-                                alt="Usage" 
-                                className="w-full h-full object-contain opacity-0 transition-opacity duration-300"
-                                onLoad={(e) => (e.target as HTMLElement).classList.remove('opacity-0')}
-                                onError={(e) => {
-                                  (e.target as HTMLElement).parentElement!.style.display = 'none';
-                                }} 
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </button>
               )) : (
