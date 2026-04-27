@@ -89,10 +89,14 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
     try {
       // 1. Call backend to create VPN config in 3x-ui
       const token = await user.getIdToken();
+      const serverToSend = { ...selectedServer };
+      delete serverToSend.supportedAppIcons;
+      delete serverToSend.generalUsageIcons;
+
       const response = await axios.post('/api/vpn/purchase', {
         userId: user.uid,
         userEmail: user.email,
-        server: selectedServer, // Send full server object with credentials
+        server: serverToSend, // Send server without large icon strings
         inboundId: selectedNetwork.inboundId,
         days: duration,
         price: totalPrice,
@@ -130,12 +134,16 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
     setError('');
 
     try {
+      const serverToSend = { ...selectedServer };
+      delete serverToSend.supportedAppIcons;
+      delete serverToSend.generalUsageIcons;
+
       // 1. Call backend to create trial VPN
       const token = await user.getIdToken();
       const response = await axios.post('/api/vpn/trial', {
         userId: user.uid,
         userEmail: user.email,
-        server: selectedServer,
+        server: serverToSend,
         inboundId: selectedNetwork.inboundId,
         network: selectedNetwork.name
       }, {
@@ -278,13 +286,21 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
                   <div className="flex flex-col gap-3">
                     {/* Supported Apps */}
-                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).length > 0 && (
+                    {Array.isArray(s.supportedAppIcons) && s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null').length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">Supported Apps</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).map((icon: string, idx: number) => (
+                          {s.supportedAppIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null' && i !== 'undefined').slice(0, 2).map((icon: string, idx: number) => (
                             <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
-                              <img src={icon} alt="App" className="w-full h-full object-contain" />
+                              <img 
+                                src={icon} 
+                                alt="App" 
+                                className="w-full h-full object-contain opacity-0 transition-opacity duration-300" 
+                                onLoad={(e) => (e.target as HTMLElement).classList.remove('opacity-0')}
+                                onError={(e) => {
+                                  (e.target as HTMLElement).parentElement!.style.display = 'none';
+                                }} 
+                              />
                             </div>
                           ))}
                         </div>
@@ -292,13 +308,21 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
                     )}
 
                     {/* General Usage */}
-                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).length > 0 && (
+                    {Array.isArray(s.generalUsageIcons) && s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null').length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[8px] uppercase font-black text-slate-500 tracking-widest">General Usage</p>
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                          {s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.length > 10).slice(0, 10).map((icon: string, idx: number) => (
+                          {s.generalUsageIcons.filter((i: any) => typeof i === 'string' && i.trim().length > 0 && i !== 'null' && i !== 'undefined').slice(0, 4).map((icon: string, idx: number) => (
                             <div key={idx} className="w-6 h-6 rounded-md bg-white/5 border border-white/10 p-1 flex-shrink-0">
-                              <img src={icon} alt="Usage" className="w-full h-full object-contain" />
+                              <img 
+                                src={icon} 
+                                alt="Usage" 
+                                className="w-full h-full object-contain opacity-0 transition-opacity duration-300"
+                                onLoad={(e) => (e.target as HTMLElement).classList.remove('opacity-0')}
+                                onError={(e) => {
+                                  (e.target as HTMLElement).parentElement!.style.display = 'none';
+                                }} 
+                              />
                             </div>
                           ))}
                         </div>

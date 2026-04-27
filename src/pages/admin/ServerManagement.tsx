@@ -3,78 +3,83 @@ import axios from 'axios';
 import { Server, Plus, Trash2, Power, Settings, Edit, Loader2, Save, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
-  const [uploadingCategory, setUploadingCategory] = useState<{ field: string, index: number } | null>(null);
+const IconSlot = ({ field, index, label, data, setData }: { field: string, index: number, label: string, data: any, setData: any }) => {
+  const icon = data[field]?.[index];
+  const [isPasting, setIsPasting] = useState(false);
+  const [tempUrl, setTempUrl] = useState("");
 
-  const handleIconUpload = (field: string, index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 512 * 1024) {
-      alert('ไฟล์มีขนาดใหญ่เกินไป (จำกัด 512KB ต่อรูป เพื่อประสิทธิภาพ)');
-      return;
-    }
-
-    setUploadingCategory({ field, index });
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      const currentIcons = [...(data[field] || [])];
-      currentIcons[index] = base64String;
-      setData({ ...data, [field]: currentIcons });
-      setUploadingCategory(null);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removeIcon = (field: string, index: number) => {
+  const removeIcon = () => {
     const currentIcons = [...(data[field] || [])];
     currentIcons[index] = null;
     setData({ ...data, [field]: currentIcons });
   };
 
-  const IconSlot = ({ field, index, label }: { field: string, index: number, label: string }) => {
-    const icon = data[field]?.[index];
-    const isUploading = uploadingCategory?.field === field && uploadingCategory?.index === index;
-
-    return (
-      <div className="flex flex-col items-center gap-2">
-        <div className="relative group/icon w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center overflow-hidden transition-all hover:border-slate-700">
-          {icon ? (
-            <>
-              <img src={icon} alt={label} className="w-full h-full object-contain p-2" />
-              <button
-                type="button"
-                onClick={() => removeIcon(field, index)}
-                className="absolute top-1 right-1 bg-red-500 p-1 rounded-md opacity-0 group-hover/icon:opacity-100 transition-opacity"
-              >
-                <Trash2 className="w-3 h-3 text-white" />
-              </button>
-            </>
-          ) : (
-            <label className="cursor-pointer flex flex-col items-center gap-1 text-slate-600 hover:text-blue-400 transition-colors">
-              <Upload className="w-5 h-5" />
-              <span className="text-[8px] font-bold uppercase">Upload</span>
-              <input 
-                type="file" 
-                className="hidden" 
-                accept="image/*" 
-                onChange={(e) => handleIconUpload(field, index, e)}
-              />
-            </label>
-          )}
-
-          {isUploading && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-            </div>
-          )}
-        </div>
-        <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
-      </div>
-    );
+  const handleSaveUrl = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (tempUrl) {
+      if (tempUrl.startsWith('data:')) {
+        alert('ไม่อนุญาตให้ใช้ข้อมูลรูปภาพโดยตรง (data URI) กรุณาใช้ลิงก์ URL (เช่น https://...)');
+        return;
+      }
+      if (tempUrl.length > 2000) {
+        alert('ลิงก์ URL ยาวเกินไป (เกิน 2000 ตัวอักษร)');
+        return;
+      }
+      const currentIcons = [...(data[field] || [])];
+      currentIcons[index] = tempUrl;
+      setData({ ...data, [field]: currentIcons });
+      setIsPasting(false);
+      setTempUrl("");
+    }
   };
 
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative group/icon w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center overflow-hidden transition-all hover:border-slate-700">
+        {icon ? (
+          <>
+            <img src={icon} alt={label} className="w-full h-full object-contain p-2" />
+            <button
+              type="button"
+              onClick={removeIcon}
+              className="absolute top-1 right-1 bg-red-500 p-1 rounded-md opacity-0 group-hover/icon:opacity-100 transition-opacity"
+            >
+              <Trash2 className="w-3 h-3 text-white" />
+            </button>
+          </>
+        ) : isPasting ? (
+          <div className="absolute inset-0 bg-slate-900 p-1 flex flex-col items-center justify-center gap-1 z-10">
+            <input 
+              autoFocus
+              type="text"
+              placeholder="Paste URL"
+              className="w-full bg-black border border-slate-700 rounded text-[8px] p-1 text-white text-center"
+              value={tempUrl}
+              onChange={e => setTempUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' ? handleSaveUrl() : null}
+            />
+            <div className="flex gap-1 w-full justify-center mt-1">
+              <button type="button" onClick={handleSaveUrl} className="bg-blue-500 hover:bg-blue-600 rounded text-[8px] px-2 py-0.5 text-white transition-colors">OK</button>
+              <button type="button" onClick={() => { setIsPasting(false); setTempUrl(""); }} className="bg-slate-700 hover:bg-slate-600 rounded text-[8px] px-2 py-0.5 text-white transition-colors">X</button>
+            </div>
+          </div>
+        ) : (
+          <button 
+            type="button"
+            onClick={() => setIsPasting(true)}
+            className="cursor-pointer flex flex-col items-center justify-center w-full h-full gap-1 text-slate-600 hover:text-blue-400 transition-colors"
+          >
+            <Upload className="w-5 h-5" />
+            <span className="text-[8px] font-bold uppercase text-center mt-1 leading-tight">Paste<br/>URL</span>
+          </button>
+        )}
+      </div>
+      <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
+    </div>
+  );
+};
+
+const ServerForm = ({ data, setData, onSubmit, onCancel, title, isSaving }: any) => {
   return (
     <form onSubmit={onSubmit} className="flex flex-col max-h-[75dvh]">
       <div className="space-y-6 overflow-y-auto pr-2 pb-4 custom-scrollbar">
@@ -159,8 +164,8 @@ const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
         <div className="space-y-2">
           <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">แอพที่รองรับ (สูงสุด 2 แอพ)</label>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
-            <IconSlot field="supportedAppIcons" index={0} label="App 1" />
-            <IconSlot field="supportedAppIcons" index={1} label="App 2" />
+            <IconSlot field="supportedAppIcons" index={0} label="App 1" data={data} setData={setData} />
+            <IconSlot field="supportedAppIcons" index={1} label="App 2" data={data} setData={setData} />
           </div>
         </div>
 
@@ -168,10 +173,10 @@ const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
         <div className="space-y-2">
           <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">การใช้งานทั่วไป (สูงสุด 4 แอพ)</label>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-4">
-            <IconSlot field="generalUsageIcons" index={0} label="Usage 1" />
-            <IconSlot field="generalUsageIcons" index={1} label="Usage 2" />
-            <IconSlot field="generalUsageIcons" index={2} label="Usage 3" />
-            <IconSlot field="generalUsageIcons" index={3} label="Usage 4" />
+            <IconSlot field="generalUsageIcons" index={0} label="Usage 1" data={data} setData={setData} />
+            <IconSlot field="generalUsageIcons" index={1} label="Usage 2" data={data} setData={setData} />
+            <IconSlot field="generalUsageIcons" index={2} label="Usage 3" data={data} setData={setData} />
+            <IconSlot field="generalUsageIcons" index={3} label="Usage 4" data={data} setData={setData} />
           </div>
         </div>
 
@@ -203,15 +208,18 @@ const ServerForm = ({ data, setData, onSubmit, onCancel, title }: any) => {
         <button 
           type="button"
           onClick={onCancel}
-          className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors"
+          disabled={isSaving}
+          className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white py-3 rounded-xl font-bold transition-colors"
         >
           ยกเลิก
         </button>
         <button 
           type="submit"
-          className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+          disabled={isSaving}
+          className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
         >
-          <Save className="w-4 h-4" /> บันทึกเซิร์ฟเวอร์
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
+          {isSaving ? "กำลังบันทึก..." : "บันทึกเซิร์ฟเวอร์"}
         </button>
       </div>
     </form>
@@ -246,6 +254,7 @@ export function ServerManagement() {
   };
 
   const [newServer, setNewServer] = useState(initialServerState);
+  const [isSaving, setIsSaving] = useState(false);
 
   const fetchServers = async () => {
     try {
@@ -281,6 +290,20 @@ export function ServerManagement() {
 
   const handleAddServer = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check for base64 / invalid icons
+    const allIcons = [
+      ...(newServer.supportedAppIcons || []),
+      ...(newServer.generalUsageIcons || [])
+    ];
+    for (const icon of allIcons) {
+      if (icon && typeof icon === 'string' && (icon.startsWith('data:') || icon.length > 2000)) {
+        alert('พบรูปภาพแบบแนบโดยตรงในระบบ กรุณาลบและใช้เป็นลิงก์ URL แทน เพื่อไม่ให้เกิดข้อผิดพลาดในการบันทึก');
+        return;
+      }
+    }
+
+    setIsSaving(true);
     try {
       // Stringify icons before sending
       const serverPayload = {
@@ -292,15 +315,33 @@ export function ServerManagement() {
       await axios.post('/api/admin/servers', serverPayload);
       setNewServer(initialServerState);
       setShowAddModal(false);
-      fetchServers();
-    } catch (error) {
+      await fetchServers();
+      alert('บันทึกข้อมูลเซิร์ฟเวอร์เรียบร้อยแล้ว');
+    } catch (error: any) {
       console.error('Failed to create server', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleUpdateServer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingServer) return;
+
+    // Check for base64 / invalid icons
+    const allIcons = [
+      ...(editingServer.supportedAppIcons || []),
+      ...(editingServer.generalUsageIcons || [])
+    ];
+    for (const icon of allIcons) {
+      if (icon && typeof icon === 'string' && (icon.startsWith('data:') || icon.length > 2000)) {
+        alert('พบรูปภาพแบบแนบโดยตรงในระบบ กรุณาลบและใช้เป็นลิงก์ URL แทน เพื่อไม่ให้เกิดข้อผิดพลาดในการบันทึก');
+        return;
+      }
+    }
+
+    setIsSaving(true);
     try {
       const { id, ...data } = editingServer;
       const serverPayload = {
@@ -310,9 +351,13 @@ export function ServerManagement() {
       };
       await axios.put(`/api/admin/servers/${id}`, serverPayload);
       setEditingServer(null);
-      fetchServers();
-    } catch (error) {
+      await fetchServers();
+      alert('อัปเดตข้อมูลเซิร์ฟเวอร์เรียบร้อยแล้ว');
+    } catch (error: any) {
       console.error('Failed to update server', error);
+      alert('เกิดข้อผิดพลาดในการอัปเดต: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -496,6 +541,7 @@ export function ServerManagement() {
                   setData={setNewServer}
                   onSubmit={handleAddServer}
                   onCancel={() => setShowAddModal(false)}
+                  isSaving={isSaving}
                 />
               ) : (
                 <ServerForm 
@@ -504,6 +550,7 @@ export function ServerManagement() {
                   setData={setEditingServer}
                   onSubmit={handleUpdateServer}
                   onCancel={() => setEditingServer(null)}
+                  isSaving={isSaving}
                 />
               )}
             </motion.div>

@@ -395,8 +395,8 @@ async function startServer() {
   const PORT = 3000;
 
   // Trust proxy for rate limiting (Cloud Run/Nginx)
-  // Set to 1 to trust the first proxy (e.g., Cloud Run load balancer)
-  app.set('trust proxy', 1);
+  // Set to true to trust all proxies
+  app.set('trust proxy', true);
 
   // Security Middlewares
   app.use(helmet({
@@ -405,8 +405,8 @@ async function startServer() {
     crossOriginOpenerPolicy: false, // Allow Firebase popups to communicate back
   }));
   app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Simple logging middleware
   app.use((req, res, next) => {
@@ -428,7 +428,7 @@ async function startServer() {
   // Rate Limiting
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 10000, 
     message: { error: "Too many requests from this IP, please try again after 15 minutes" },
     standardHeaders: true,
     legacyHeaders: false,
@@ -436,19 +436,19 @@ async function startServer() {
 
   const topupLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10, // Limit each IP to 10 topup attempts per hour
+    max: 500, // Limit each IP to 10 topup attempts per hour
     message: { error: "Too many topup attempts, please try again in an hour" },
   });
 
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 login attempts per 15 minutes
+    max: 1000, // Limit each IP to 20 login attempts per 15 minutes
     message: { error: "Too many login attempts, please try again after 15 minutes" },
   });
 
   const purchaseLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
-    max: 5, // Limit each IP to 5 purchase attempts per 10 minutes
+    max: 500, // Limit each IP to 5 purchase attempts per 10 minutes
     message: { error: "Too many purchase attempts, please try again after 10 minutes" },
   });
 
@@ -1719,6 +1719,17 @@ async function startServer() {
     try {
       const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(7);
       
+      const truncateIcons = (val: any) => {
+        if (!val) return '[]';
+        let parsed = val;
+        if (typeof val === 'string') {
+          try { parsed = JSON.parse(val); } catch(e) { return '[]'; }
+        }
+        if (!Array.isArray(parsed)) return '[]';
+        const cleaned = parsed.map(i => typeof i === 'string' && i.length < 2000 ? i : null).filter(Boolean);
+        return JSON.stringify(cleaned);
+      };
+
       const serverData = {
         name: data.name,
         host: data.host,
@@ -1729,8 +1740,8 @@ async function startServer() {
         status: data.status || 'online',
         maxUsers: data.maxUsers || 100,
         description: data.description || '',
-        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? data.supportedAppIcons : JSON.stringify(data.supportedAppIcons || []),
-        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? data.generalUsageIcons : JSON.stringify(data.generalUsageIcons || [])
+        supportedAppIcons: truncateIcons(data.supportedAppIcons),
+        generalUsageIcons: truncateIcons(data.generalUsageIcons)
       };
 
       // Update SQLite
@@ -1750,6 +1761,7 @@ async function startServer() {
 
       res.json({ success: true, id });
     } catch (error: any) {
+      console.error("SERVER CREATE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -1758,6 +1770,17 @@ async function startServer() {
     const { id } = req.params;
     const data = req.body;
     try {
+      const truncateIcons = (val: any) => {
+        if (!val) return '[]';
+        let parsed = val;
+        if (typeof val === 'string') {
+          try { parsed = JSON.parse(val); } catch(e) { return '[]'; }
+        }
+        if (!Array.isArray(parsed)) return '[]';
+        const cleaned = parsed.map(i => typeof i === 'string' && i.length < 2000 ? i : null).filter(Boolean);
+        return JSON.stringify(cleaned);
+      };
+
       const serverData = {
         name: data.name,
         host: data.host,
@@ -1768,8 +1791,8 @@ async function startServer() {
         status: data.status,
         maxUsers: data.maxUsers || 100,
         description: data.description || '',
-        supportedAppIcons: typeof data.supportedAppIcons === 'string' ? data.supportedAppIcons : JSON.stringify(data.supportedAppIcons || []),
-        generalUsageIcons: typeof data.generalUsageIcons === 'string' ? data.generalUsageIcons : JSON.stringify(data.generalUsageIcons || [])
+        supportedAppIcons: truncateIcons(data.supportedAppIcons),
+        generalUsageIcons: truncateIcons(data.generalUsageIcons)
       };
 
       // Update SQLite
@@ -1788,6 +1811,7 @@ async function startServer() {
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error("SERVER UPDATE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   });
