@@ -395,8 +395,8 @@ async function startServer() {
   const PORT = 3000;
 
   // Trust proxy for rate limiting (Cloud Run/Nginx)
-  // Set to true to trust all proxies
-  app.set('trust proxy', true);
+  // Set to 1 to trust the first proxy
+  app.set('trust proxy', 1);
 
   // Security Middlewares
   app.use(helmet({
