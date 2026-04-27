@@ -11,6 +11,8 @@ import axios from 'axios';
 
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
+import { parseSafeDate } from '../lib/date-utils';
+
 export function Dashboard({ user, profile }: { user: any; profile: any }) {
   const [vpns, setVpns] = useState<any[]>([]);
   const [selectedVpn, setSelectedVpn] = useState<any>(null);
@@ -57,9 +59,9 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
   }, []);
 
   const allFilteredVpns = vpns.filter(v => {
-    const expireDate = new Date(v.expireAt);
+    const expireDate = parseSafeDate(v.expireAt);
     const now = new Date();
-    const isExpired = expireDate <= now;
+    const isExpired = expireDate.getTime() <= now.getTime();
     
     // Hide if expired more than 48 hours
     const hoursSinceExpired = (now.getTime() - expireDate.getTime()) / (1000 * 60 * 60);
@@ -109,7 +111,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
             </div>
             <div>
               <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">การตั้งค่าที่ใช้งานอยู่</p>
-              <p className="text-2xl font-bold text-white drop-shadow-md">{vpns.filter(v => new Date(v.expireAt).getTime() > Date.now()).length}</p>
+              <p className="text-2xl font-bold text-white drop-shadow-md">{vpns.filter(v => parseSafeDate(v.expireAt).getTime() > Date.now()).length}</p>
             </div>
           </div>
         </div>
@@ -159,7 +161,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                     </div>
                   )}
                   {(() => {
-                    const isExpired = new Date(vpn.expireAt) <= new Date();
+                    const isExpired = parseSafeDate(vpn.expireAt).getTime() <= new Date().getTime();
                     return (
                       <div className={`flex items-center gap-1 text-xs font-bold ${!isExpired ? 'text-emerald-400' : 'text-red-400'}`}>
                         <div className={`w-2 h-2 rounded-full ${!isExpired ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.8)]'}`} />
@@ -179,14 +181,15 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-slate-400" />
                   {(() => {
-                    const expireDate = new Date(vpn.expireAt);
+                    const expireDate = parseSafeDate(vpn.expireAt);
                     const now = new Date();
-                    const isExpired = expireDate <= now;
+                    const isExpired = expireDate.getTime() <= now.getTime();
                     const hoursSinceExpired = (now.getTime() - expireDate.getTime()) / (1000 * 60 * 60);
 
                     if (isExpired && hoursSinceExpired > 12) {
                       return <span>หมดอายุ จะถูกลบข้อมูลในไม่ช้า</span>;
                     }
+                    if (isNaN(expireDate.getTime())) return <span>-</span>;
                     return <span>หมดอายุ {formatDistanceToNow(expireDate, { addSuffix: true, locale: th })}</span>;
                   })()}
                 </div>
@@ -211,7 +214,7 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   <QrCode className="w-5 h-5" />
                 </button>
               </div>
-              {new Date(vpn.expireAt) > new Date() && (
+              {parseSafeDate(vpn.expireAt).getTime() > new Date().getTime() && (
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -324,14 +327,15 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                       <p className="text-xs text-slate-400 uppercase font-bold mb-1">หมดอายุใน</p>
                       <p className="text-white font-bold drop-shadow-sm">
                         {(() => {
-                          const expireDate = new Date(selectedVpn.expireAt);
+                          const expireDate = parseSafeDate(selectedVpn.expireAt);
                           const now = new Date();
-                          const isExpired = expireDate <= now;
+                          const isExpired = expireDate.getTime() <= now.getTime();
                           const hoursSinceExpired = (now.getTime() - expireDate.getTime()) / (1000 * 60 * 60);
 
                           if (isExpired && hoursSinceExpired > 12) {
                             return "หมดอายุ จะถูกลบข้อมูลในไม่ช้า";
                           }
+                          if (isNaN(expireDate.getTime())) return "-";
                           return formatDistanceToNow(expireDate, { locale: th });
                         })()}
                       </p>
@@ -343,8 +347,8 @@ export function Dashboard({ user, profile }: { user: any; profile: any }) {
                   </div>
 
                   {(() => {
-                    const expireDate = new Date(selectedVpn.expireAt);
-                    if (expireDate > new Date()) {
+                    const expireDate = parseSafeDate(selectedVpn.expireAt);
+                    if (expireDate.getTime() > new Date().getTime()) {
                       return (
                         <button 
                           onClick={() => {

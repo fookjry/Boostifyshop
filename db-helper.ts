@@ -56,6 +56,41 @@ export class DbHelper {
     return pgSql;
   }
 
+  private mapRow(row: any) {
+    if (!row) return row;
+    const keyMap: any = {
+      userid: 'userId',
+      serverid: 'serverId',
+      servername: 'serverName',
+      inboundid: 'inboundId',
+      expireat: 'expireAt',
+      devicecount: 'deviceCount',
+      clientname: 'clientName',
+      istrial: 'isTrial',
+      isadclaim: 'isAdClaim',
+      createdat: 'createdAt',
+      useremail: 'userEmail',
+      sliphash: 'slipHash',
+      ipaddress: 'ipAddress',
+      claimtime: 'claimTime',
+      ticketid: 'ticketId',
+      updatedat: 'updatedAt',
+      sortorder: 'sortOrder',
+      supportedappicons: 'supportedAppIcons',
+      generalusageicons: 'generalUsageIcons',
+      maxusers: 'maxUsers',
+      currentusers: 'currentUsers',
+      hasusedtrial: 'hasUsedTrial',
+      lasttrialat: 'lastTrialAt',
+      lastadclaimat: 'lastAdClaimAt'
+    };
+    const newRow: any = {};
+    for (const key of Object.keys(row)) {
+      newRow[keyMap[key] || key] = row[key];
+    }
+    return newRow;
+  }
+
   async run(sql: string, params: any[] = []): Promise<any> {
     const finalSql = this.transformSql(sql);
     if (this.isPg) {
@@ -69,7 +104,7 @@ export class DbHelper {
     const finalSql = this.transformSql(sql);
     if (this.isPg) {
       const res = await this.pgPool!.query(finalSql, params);
-      return res.rows[0];
+      return this.mapRow(res.rows[0]);
     } else {
       return this.sqliteDb!.prepare(finalSql).get(...params);
     }
@@ -79,7 +114,7 @@ export class DbHelper {
     const finalSql = this.transformSql(sql);
     if (this.isPg) {
       const res = await this.pgPool!.query(finalSql, params);
-      return res.rows;
+      return res.rows.map(row => this.mapRow(row));
     } else {
       return this.sqliteDb!.prepare(finalSql).all(...params);
     }
@@ -90,8 +125,14 @@ export class DbHelper {
       const client = await this.pgPool!.connect();
       
       const tRun = async (sql: string, params: any[] = []) => client.query(this.transformSql(sql), params);
-      const tGet = async (sql: string, params: any[] = []) => (await client.query(this.transformSql(sql), params)).rows[0];
-      const tAll = async (sql: string, params: any[] = []) => (await client.query(this.transformSql(sql), params)).rows;
+      const tGet = async (sql: string, params: any[] = []) => {
+        const res = await client.query(this.transformSql(sql), params);
+        return this.mapRow(res.rows[0]);
+      };
+      const tAll = async (sql: string, params: any[] = []) => {
+        const res = await client.query(this.transformSql(sql), params);
+        return res.rows.map(row => this.mapRow(row));
+      };
 
       try {
         await client.query('BEGIN');

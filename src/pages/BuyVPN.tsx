@@ -5,6 +5,7 @@ import { Server, Zap, Shield, Check, Loader2, AlertTriangle, Wifi, Gift } from '
 import { motion } from 'motion/react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { parseSafeDate } from '../lib/date-utils';
 
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
@@ -29,7 +30,7 @@ export function BuyVPN({ user, profile }: { user: any; profile: any }) {
 
   const canUseTrial = () => {
     if (!profile?.lastTrialAt) return true;
-    const lastTrialTime = new Date(profile.lastTrialAt).getTime();
+    const lastTrialTime = parseSafeDate(profile.lastTrialAt).getTime();
     const now = new Date().getTime();
     const hoursSinceLastTrial = (now - lastTrialTime) / (1000 * 60 * 60);
     return hoursSinceLastTrial >= 24;
