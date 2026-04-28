@@ -15,7 +15,8 @@ export function Login({ settings }: { settings: any }) {
 
   const siteName = settings?.siteName || 'VPNSaaS';
   const logoUrl = settings?.logoUrl;
-  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  const isPreview = window.location.hostname.includes('.run.app') || window.location.hostname === 'localhost';
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || (isPreview ? '1x00000000000000000000AA' : '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +26,7 @@ export function Login({ settings }: { settings: any }) {
       return;
     }
 
-    if (!isRegister && turnstileSiteKey && !turnstileToken) {
+    if (turnstileSiteKey && !turnstileToken) {
       setError('กรุณายืนยันว่าคุณไม่ใช่โปรแกรมอัตโนมัติ');
       return;
     }
@@ -183,7 +184,7 @@ export function Login({ settings }: { settings: any }) {
             </div>
           )}
 
-          {!isRegister && turnstileSiteKey && (
+          {turnstileSiteKey && (
             <div className="flex justify-center my-4">
               <Turnstile
                 siteKey={turnstileSiteKey}
